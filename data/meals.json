@@ -1,0 +1,108 @@
+[
+  {
+    "id": "omelette",
+    "name": "Ομελέτα",
+    "contents": "5 αυγά, 40g μπέικον, 100g cottage, 5g ελαιόλαδο",
+    "kcal": 610,
+    "protein_g": 49,
+    "tags": "main,breakfast"
+  },
+  {
+    "id": "oats",
+    "name": "Βρώμη στοίβα",
+    "contents": "80g βρώμη, μπανάνα, 15g φυστικοβούτυρο, 10g μέλι, 100g berries",
+    "kcal": 600,
+    "protein_g": 16,
+    "tags": "breakfast"
+  },
+  {
+    "id": "shake",
+    "name": "Shake",
+    "contents": "30g whey concentrate + 20g pea protein + 250ml γάλα 1.5%",
+    "kcal": 320,
+    "protein_g": 44,
+    "tags": "shake,protein"
+  },
+  {
+    "id": "chicken",
+    "name": "Κοτόπουλο κλασικό",
+    "contents": "200g στήθος, 60g ρύζι (ξερό) ή 300g πατάτα, μπρόκολο, μουστάρδα",
+    "kcal": 600,
+    "protein_g": 62,
+    "tags": "main"
+  },
+  {
+    "id": "beef",
+    "name": "Κιμάς bowl",
+    "contents": "200g μοσχαρίσιος κιμάς 5-10%, 70g ζυμαρικά ολικής, σάλτσα, 10g παρμεζάνα",
+    "kcal": 650,
+    "protein_g": 55,
+    "tags": "main"
+  },
+  {
+    "id": "pork",
+    "name": "Χοιρινό ψητό",
+    "contents": "200g ψαρονέφρι, 250g γλυκοπατάτα, σαλάτα",
+    "kcal": 580,
+    "protein_g": 58,
+    "tags": "main"
+  },
+  {
+    "id": "tuna_lazy",
+    "name": "Backup τόνος",
+    "contents": "Insalatissime ×1.5, 2 φέτες ψωμί ολικής, 100g cottage",
+    "kcal": 550,
+    "protein_g": 40,
+    "tags": "backup"
+  },
+  {
+    "id": "cottage_lazy",
+    "name": "Cottage-γκοφρέτα",
+    "contents": "200g cottage, 100g ριζογκοφρέτες, ρίγανη",
+    "kcal": 580,
+    "protein_g": 30,
+    "tags": "backup"
+  },
+  {
+    "id": "yogurt_bomb",
+    "name": "Γιαούρτι-bomb",
+    "contents": "200g γιαούρτι 2%, 50g μέλι, protein bar",
+    "kcal": 470,
+    "protein_g": 34,
+    "max_per_week": 2,
+    "tags": "snack,treat"
+  },
+  {
+    "id": "yogurt_snack",
+    "name": "Σνακ γιαούρτι",
+    "contents": "200g γιαούρτι 2% + φρούτο + 5g κρεατίνη",
+    "kcal": 200,
+    "protein_g": 20,
+    "tags": "snack"
+  },
+  {
+    "id": "nuts",
+    "name": "Ξηροί καρποί",
+    "contents": "30g μείγμα",
+    "kcal": 180,
+    "protein_g": 6,
+    "tags": "snack"
+  },
+  {
+    "id": "bar",
+    "name": "Protein bar",
+    "contents": "1 μπάρα",
+    "kcal": 200,
+    "protein_g": 18,
+    "tags": "snack,protein"
+  },
+  {
+    "id": "salmon",
+    "name": "Σολομός (reward)",
+    "contents": "250g φιλέτο σολομού, λαχανικά, λεμόνι — κλειδωμένο έπαθλο",
+    "kcal": 520,
+    "protein_g": 45,
+    "locked": 1,
+    "tags": "main,reward"
+  }
+]

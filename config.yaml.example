@@ -1,0 +1,43 @@
+# MealSentry configuration — copy to config.yaml and edit.
+# Secrets (bot token, user id) are NOT here; they come from environment variables:
+#   MEALSENTRY_TOKEN    — Telegram bot token from @BotFather
+#   MEALSENTRY_USER_ID  — the single allowed Telegram numeric user id
+
+# --- Identity / biometrics (seeded into DB on first run; updatable at runtime) ---
+name: YourName
+sex: male            # male | female
+age: 38              # placeholder — correct via /profile or here
+height_cm: 190
+weight_kg: 96
+start_weight_kg: 100
+
+# --- Targets ---
+steps_target: 11000
+gym_target_sessions: 3       # sessions per week (~3 hours)
+sleep_target_hours: 7.0      # minimum before escalation
+protein_factor: 1.8          # protein floor = factor * kg  (the "death limit")
+deficit_kcal: 600            # calorie target = TDEE - deficit
+
+# --- Eating window (IF 16:8) ---
+eat_start: "14:30"
+eat_end: "22:00"
+
+# --- Coach / tone ---
+active_coach: chad_coach     # persona in coaches/<id>.yaml
+intensity: 2                 # 1..3 global knob (higher = harsher)
+
+# --- Environment ---
+timezone: Europe/Athens
+
+# --- Storage ---
+# Absolute path recommended on the Pi (e.g. /var/lib/mealsentry/mealsentry.db).
+# Relative paths resolve against the repository root.
+db_path: mealsentry.db
+
+# --- FastAPI backend (future Android app) ---
+api_host: 127.0.0.1
+api_port: 8787
+
+# --- Shopping / budget ---
+chicken_budget_eur: 100      # monthly baseline for /spent tracking
+shop_store: "ΑΒ Βασιλόπουλος"

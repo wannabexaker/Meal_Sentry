@@ -1,0 +1,30 @@
+[Unit]
+Description=MealSentry Telegram bot (Coach: Chad Coach)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=__USER__
+WorkingDirectory=__ROOT__
+EnvironmentFile=__ENVFILE__
+ExecStart=__ROOT__/.venv/bin/python -m mealsentry.bot
+Restart=on-failure
+RestartSec=5
+
+# --- Hardening (spec §10) ---
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=true
+ReadWritePaths=__ROOT__
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictNamespaces=true
+RestrictRealtime=true
+LockPersonality=true
+MemoryDenyWriteExecute=false
+
+[Install]
+WantedBy=multi-user.target

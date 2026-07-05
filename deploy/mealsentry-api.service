@@ -1,0 +1,29 @@
+[Unit]
+Description=MealSentry FastAPI backend (port 8787)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=__USER__
+WorkingDirectory=__ROOT__
+EnvironmentFile=__ENVFILE__
+ExecStart=__ROOT__/.venv/bin/python -m mealsentry.api
+Restart=on-failure
+RestartSec=5
+
+# --- Hardening ---
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=true
+ReadWritePaths=__ROOT__
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictNamespaces=true
+RestrictRealtime=true
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target

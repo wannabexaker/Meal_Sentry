@@ -1,0 +1,43 @@
+# Secrets & local config
+config.yaml
+.env
+.env.*
+*.env
+!.env.example
+mealsentry.env
+*.pem
+*.key
+
+# Runtime DB & generated artifacts
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+data/*.db
+var/
+charts/
+*.png
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+build/
+dist/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Local-only docs: analysis cache (notes.md), hygiene report, and the internal build
+# spec (the build spec contains personal health/lifestyle data — never publish).
+docs/
+Docs/

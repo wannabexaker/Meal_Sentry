@@ -1,0 +1,19 @@
+# Coach persona manifest. MealSentry can host multiple coaches; this is the first.
+# Swap `active_coach` in config.yaml to change personalities without touching the engine.
+id: chad_coach
+display_name: "Chad Coach"
+description: >
+  Ο πρώτος coach του MealSentry. Επιθετικός personal trainer που δεν χαϊδεύει αυτιά:
+  σε χτυπάει με τα δικά σου νούμερα και τις δικές σου αγνοημένες ειδοποιήσεις — ποτέ με
+  προσβολές, ποτέ body-shaming, ποτέ βρισιές. Τα δεδομένα κάνουν τη δουλειά.
+default_intensity: 2   # 1..3, overridable via config.yaml `intensity`
+templates: tone/templates_gr.yaml
+
+# Tone tiers are driven by the respect meter (engine/game.py):
+#   LOW  (respect < 34)  — σκληρός, κοφτός, trash-talk πάνω στα νούμερα
+#   MID  (34..66)        — drill-sergeant, λακωνικός
+#   HIGH (>= 67)         — peer-level, ακόμα ευθύς αλλά με σεβασμό
+tiers:
+  LOW: "harsh, blunt, data-driven"
+  MID: "drill-sergeant terse"
+  HIGH: "peer-level banter, direct"

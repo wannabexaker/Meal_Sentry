@@ -1,0 +1,9 @@
+# Runtime dependencies for MealSentry (see pyproject.toml for the source of truth).
+# Pin-free minimums; install.sh installs these into the venv.
+python-telegram-bot>=21.0
+APScheduler>=3.10
+aiosqlite>=0.20
+matplotlib>=3.8
+PyYAML>=6.0
+fastapi>=0.110
+uvicorn>=0.29
