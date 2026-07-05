@@ -56,6 +56,7 @@ class Config:
     # API
     api_host: str = "127.0.0.1"
     api_port: int = 8787
+    dashboard_url: str = ""  # shown by the /dashboard menu button (e.g. Tailscale URL)
 
     # Shopping
     chicken_budget_eur: float = 100.0

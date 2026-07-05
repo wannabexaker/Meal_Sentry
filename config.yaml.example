@@ -34,9 +34,11 @@ timezone: Europe/Athens
 # Relative paths resolve against the repository root.
 db_path: mealsentry.db
 
-# --- FastAPI backend (future Android app) ---
-api_host: 127.0.0.1
+# --- FastAPI backend + dashboard ---
+api_host: 127.0.0.1          # set to 0.0.0.0 to reach the dashboard over LAN/Tailscale
 api_port: 8787
+# URL shown by the Telegram "Dashboard" button (e.g. http://<tailscale-ip>:8787/)
+dashboard_url: ""
 
 # --- Shopping / budget ---
 chicken_budget_eur: 100      # monthly baseline for /spent tracking

@@ -11,7 +11,12 @@ import logging
 from dataclasses import dataclass, field
 from functools import wraps
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import (
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    ReplyKeyboardMarkup,
+    Update,
+)
 from telegram.constants import ParseMode
 from telegram.ext import (
     Application,
@@ -108,7 +113,10 @@ def guard(handler):
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     ctx = _ctx(context)
     p = await ctx.service.profile()
-    await update.message.reply_text(ctx.coach.render("greeting", name=p.get("name", "")))
+    await update.message.reply_text(
+        ctx.coach.render("greeting", name=p.get("name", ""))
+        + "\n\n👇 Χρησιμοποίησε το μενού — δεν χρειάζεται να θυμάσαι εντολές.",
+        reply_markup=MAIN_MENU)
 
 
 @guard
@@ -419,11 +427,42 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     elif action == "eat":
         try:
             res = await ctx.service.ate(arg, when)
+            await _confirm_open_meal_task(ctx)
+            extra = (f"\n💪 Protein floor! +{res['floor_award']['xp_delta']} XP"
+                     if res["floor_award"] else "")
             await query.edit_message_text(
                 f"✅ {res['logged']['name']}: {res['logged']['kcal']}kcal, "
-                f"{res['logged']['protein_g']}p (+{res['award']['xp_delta']} XP)")
+                f"{res['logged']['protein_g']}p (+{res['award']['xp_delta']} XP)" + extra)
         except (meals.MealLocked, meals.MealCapReached, meals.MealNotFound) as e:
             await query.edit_message_text(str(e))
+    elif action == "steps":
+        res = await ctx.service.log_steps(int(arg), when)
+        await nag.confirm(ctx.db, "steps", when)
+        if res["hit"]:
+            xp = res["award"]["xp_delta"] if res["award"] else 0
+            await query.edit_message_text(ctx.coach.render("steps_ok", xp=xp))
+        else:
+            gap = res["target"] - res["steps"]
+            await query.edit_message_text(f"👟 {res['steps']}/{res['target']}. Λείπουν {gap}. Κουνήσου.")
+    elif action == "gymlog":
+        res = await ctx.service.log_gym(int(arg), when)
+        a = res["award"]
+        up = ("\n" + ctx.coach.render("level_up", level_name=a["level_name"],
+                                      unlock=", ".join(a["unlocks"]) or "—")) if a["level_up"] else ""
+        await query.edit_message_text(
+            f"🏋️ Session {res['sessions']}/{res['target']} ({arg}′). +{a['xp_delta']} XP{up}")
+    elif action == "menu":
+        if arg == "food":
+            await _send_meal_picker(ctx, query)
+        elif arg == "steps_other":
+            context.user_data["await"] = "steps"
+            await query.edit_message_text("👟 Στείλε μου τον αριθμό βημάτων (π.χ. 10500).")
+        elif arg == "weight":
+            context.user_data["await"] = "weight"
+            await query.edit_message_text("⚖️ Στείλε μου το βάρος σε kg (π.χ. 95.4).")
+        elif arg == "sleep":
+            context.user_data["await"] = "sleep"
+            await query.edit_message_text("😴 Στείλε: ώρα ύπνου + ξύπνημα (π.χ. 23:40 07:10).")
     elif action == "applycut":
         if arg == "no":
             await query.edit_message_text("OK, κρατάμε το τρέχον deficit.")
@@ -517,6 +556,147 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     return ConversationHandler.END
 
 
+# --------------------------------------------------------------------------- menu (tap UX)
+BTN_STATUS = "📋 Κατάσταση"
+BTN_FOOD = "🍽️ Φαγητό"
+BTN_STEPS = "👟 Βήματα"
+BTN_GYM = "🏋️ Γυμναστήριο"
+BTN_WEIGHT = "⚖️ Ζύγισμα"
+BTN_SLEEP = "😴 Ύπνος"
+BTN_FACT = "🧠 Trivia"
+BTN_REPORT = "📊 Report"
+BTN_DASH = "🎒 Dashboard"
+BTN_HELP = "❓ Βοήθεια"
+
+MAIN_MENU = ReplyKeyboardMarkup(
+    [[BTN_STATUS, BTN_FOOD], [BTN_STEPS, BTN_GYM], [BTN_WEIGHT, BTN_SLEEP],
+     [BTN_FACT, BTN_REPORT], [BTN_DASH, BTN_HELP]],
+    resize_keyboard=True, is_persistent=True,
+)
+MENU_LABELS = {BTN_STATUS, BTN_FOOD, BTN_STEPS, BTN_GYM, BTN_WEIGHT, BTN_SLEEP,
+               BTN_FACT, BTN_REPORT, BTN_DASH, BTN_HELP}
+
+STEPS_PRESETS = [[("8.000", "steps:8000"), ("10.000", "steps:10000")],
+                 [("11.000", "steps:11000"), ("12.000", "steps:12000")],
+                 [("✏️ Άλλο", "menu:steps_other")]]
+GYM_PRESETS = [[("45′", "gymlog:45"), ("60′", "gymlog:60"), ("90′", "gymlog:90")]]
+
+
+async def _send_meal_picker(ctx: AppContext, query=None, *, message=None) -> None:
+    """Tap-to-log buttons for enabled, unlocked meals (no command needed)."""
+    rows, row = [], []
+    for m in await meals.list_meals(ctx.db):
+        if m.locked:
+            continue
+        row.append((m.name, f"eat:{m.id}"))
+        if len(row) == 2:
+            rows.append(row)
+            row = []
+    if row:
+        rows.append(row)
+    text = "🍽️ Τι έφαγες; (πάτα για καταγραφή)"
+    if query is not None:
+        await query.edit_message_text(text, reply_markup=_markup(rows))
+    elif message is not None:
+        await message.reply_text(text, reply_markup=_markup(rows))
+
+
+@guard
+async def cmd_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await update.message.reply_text("Μενού 👇", reply_markup=MAIN_MENU)
+
+
+@guard
+async def on_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle a tap on the persistent reply keyboard."""
+    ctx = _ctx(context)
+    text = update.message.text
+    if text == BTN_STATUS:
+        await cmd_status(update, context)
+    elif text == BTN_FOOD:
+        await _send_meal_picker(ctx, message=update.message)
+    elif text == BTN_STEPS:
+        await update.message.reply_text("👟 Πόσα βήματα;", reply_markup=_markup(STEPS_PRESETS))
+    elif text == BTN_GYM:
+        await update.message.reply_text("🏋️ Προπόνηση — διάρκεια;", reply_markup=_markup(GYM_PRESETS))
+    elif text == BTN_WEIGHT:
+        context.user_data["await"] = "weight"
+        await update.message.reply_text("⚖️ Στείλε μου το βάρος σε kg (π.χ. 95.4).")
+    elif text == BTN_SLEEP:
+        context.user_data["await"] = "sleep"
+        await update.message.reply_text("😴 Στείλε: ώρα ύπνου + ξύπνημα (π.χ. 23:40 07:10).")
+    elif text == BTN_FACT:
+        await cmd_fact(update, context)
+    elif text == BTN_REPORT:
+        await cmd_report(update, context)
+    elif text == BTN_DASH:
+        url = ctx.config.dashboard_url or f"http://{ctx.config.api_host}:{ctx.config.api_port}/"
+        await update.message.reply_text(f"🎒 Dashboard (σφαιρική RPG εικόνα):\n{url}")
+    elif text == BTN_HELP:
+        await cmd_help(update, context)
+
+
+@guard
+async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Catch a plain value typed after a prompt (weight/steps/sleep) — no command needed."""
+    ctx = _ctx(context)
+    awaiting = context.user_data.pop("await", None)
+    text = (update.message.text or "").strip()
+    when = ctx.service.now()
+
+    if awaiting == "weight":
+        try:
+            kg = float(text.replace(",", "."))
+        except ValueError:
+            context.user_data["await"] = "weight"
+            await update.message.reply_text("Δώσε αριθμό, π.χ. 95.4")
+            return
+        res = await ctx.service.log_weight(kg, when)
+        t = res["targets"]
+        await update.message.reply_text(
+            ctx.coach.render("weight_logged", kg=kg, target_kcal=t["calorie_target"],
+                             floor=t["protein_floor_g"], respect=await ctx.respect()))
+        if res["stalled"] and res["proposal"]:
+            pr = res["proposal"]
+            await update.message.reply_text(
+                ctx.coach.render("stall_proposal", item=pr["item"], kcal=pr["kcal"]),
+                reply_markup=_markup([[("✅ Εφάρμοσε", f"applycut:{pr['new_deficit']}"),
+                                       ("❌ Όχι", "applycut:no")]]))
+    elif awaiting == "steps":
+        try:
+            n = int(text.replace(".", "").replace(",", "").replace(" ", ""))
+        except ValueError:
+            context.user_data["await"] = "steps"
+            await update.message.reply_text("Δώσε αριθμό βημάτων, π.χ. 10500")
+            return
+        res = await ctx.service.log_steps(n, when)
+        await nag.confirm(ctx.db, "steps", when)
+        if res["hit"]:
+            xp = res["award"]["xp_delta"] if res["award"] else 0
+            await update.message.reply_text(ctx.coach.render("steps_ok", xp=xp))
+        else:
+            await update.message.reply_text(f"👟 {n}/{res['target']}. Λείπουν {res['target'] - n}.")
+    elif awaiting == "sleep":
+        parts = text.replace("-", " ").split()
+        if len(parts) < 2:
+            context.user_data["await"] = "sleep"
+            await update.message.reply_text("Μορφή: 23:40 07:10")
+            return
+        try:
+            res = await ctx.service.log_sleep(parts[0], parts[1], when)
+        except ValueError:
+            context.user_data["await"] = "sleep"
+            await update.message.reply_text("Λάθος ώρα. Μορφή HH:MM HH:MM.")
+            return
+        e = res["entry"]
+        msg = f"😴 {e['hours']}h ({e['bed']}→{e['wake']})."
+        if res["escalate"]:
+            msg += "\n" + ctx.coach.render("sleep_escalation", nights=res["short_nights"])
+        await update.message.reply_text(msg)
+    else:
+        await update.message.reply_text("👇 Διάλεξε από το μενού.", reply_markup=MAIN_MENU)
+
+
 # --------------------------------------------------------------------------- wiring
 def build_application(ctx: AppContext) -> Application:
     app = (
@@ -548,13 +728,16 @@ def build_application(ctx: AppContext) -> Application:
     ))
 
     for name, handler in [
-        ("start", cmd_start), ("status", cmd_status), ("help", cmd_help),
+        ("start", cmd_start), ("status", cmd_status), ("help", cmd_help), ("menu", cmd_menu),
         ("ate", cmd_ate), ("skip", cmd_skip), ("weight", cmd_weight), ("steps", cmd_steps),
         ("gym", cmd_gym), ("sleep", cmd_sleep), ("stock", cmd_stock), ("spent", cmd_spent),
         ("list", cmd_list), ("w", cmd_weed), ("meals", cmd_meals), ("fact", cmd_fact),
         ("report", cmd_report), ("charts", cmd_charts),
     ]:
         app.add_handler(CommandHandler(name, handler))
+    # Tap-driven menu: exact-label buttons first, then a catch-all for typed values.
+    app.add_handler(MessageHandler(filters.Text(MENU_LABELS), on_menu))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
     app.add_handler(CallbackQueryHandler(on_callback))
     return app
 

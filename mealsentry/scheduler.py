@@ -128,6 +128,12 @@ class NagScheduler:
         return self.config.now()
 
     def _buttons(self, task_key: str, spec: dict):
+        # Meal reminders offer one-tap logging of common meals + "other" (full list).
+        if spec.get("category") == "meals":
+            return [
+                [("🍗 Κοτόπουλο", "eat:chicken"), ("🥩 Κιμάς", "eat:beef")],
+                [("🍽️ Άλλο", "menu:food"), ("💤 +30'", f"snooze:{task_key}")],
+            ]
         return [[(spec["confirm"], f"done:{task_key}"),
                  ("⏭ Skip", f"skip:{task_key}"),
                  ("💤 +30'", f"snooze:{task_key}")]]
