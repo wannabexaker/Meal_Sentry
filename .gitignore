@@ -31,11 +31,12 @@ env/
 build/
 dist/
 
-# OS / editor
+# OS / editor / local tooling
 .DS_Store
 Thumbs.db
 .idea/
 .vscode/
+.claude/
 
 # Local-only docs: analysis cache (notes.md), hygiene report, and the internal build
 # spec (the build spec contains personal health/lifestyle data — never publish).

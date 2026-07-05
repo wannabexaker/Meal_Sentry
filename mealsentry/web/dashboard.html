@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="el">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>MealSentry — Character Sheet</title>
+<style>
+  /* ---- base theme (overridden per level tier via [data-tier]) ---- */
+  :root {
+    --bg0: #0e0d12; --bg1: #16141d; --panel: #1c1a24; --panel2: #232030;
+    --ink: #e9e4d6; --muted: #9b93a8; --line: #33304a;
+    --accent: #c8873f; --accent2: #e0a860; --glow: rgba(200,135,63,.35);
+    --hp: #d1495b; --kcal: #e08a2e; --steps: #4c9f70; --gym: #4a7fb5;
+    --ok: #4c9f70; --bad: #d1495b; --warn: #e0a800;
+    --slot: #14121b; --frame: 2px solid var(--line);
+    --title-grad: linear-gradient(180deg,#f3e2b8,#c8873f);
+  }
+  body[data-tier="1"] { --accent:#b9c2cc; --accent2:#e8eef4; --glow:rgba(185,194,204,.3); --title-grad:linear-gradient(180deg,#ffffff,#9fb0bf); }
+  body[data-tier="2"] { --accent:#e3b23c; --accent2:#ffd873; --glow:rgba(227,178,60,.4); --title-grad:linear-gradient(180deg,#fff2c2,#e3b23c); }
+  body[data-tier="3"] { --accent:#9b6bd6; --accent2:#c9a4ff; --glow:rgba(155,107,214,.45); --line:#4a3d66; --title-grad:linear-gradient(180deg,#eaddff,#9b6bd6); }
+  body[data-tier="4"] { --accent:#ff8a2b; --accent2:#ffd36b; --glow:rgba(255,138,43,.5); --line:#5a4030; --title-grad:linear-gradient(180deg,#fff0c0,#ff8a2b); }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 20px; color: var(--ink);
+    font-family: "Trebuchet MS", "Segoe UI", system-ui, sans-serif;
+    background:
+      radial-gradient(1200px 600px at 50% -10%, var(--panel2), transparent 60%),
+      linear-gradient(180deg, var(--bg1), var(--bg0));
+    min-height: 100vh;
+  }
+  body[data-tier="4"] {
+    background:
+      radial-gradient(900px 500px at 50% -5%, rgba(255,138,43,.14), transparent 60%),
+      linear-gradient(180deg, #1a1410, #0e0b09);
+    animation: bgpulse 8s ease-in-out infinite alternate;
+  }
+  @keyframes bgpulse { from { filter: brightness(1); } to { filter: brightness(1.08); } }
+
+  .wrap { max-width: 1100px; margin: 0 auto; }
+  h1 {
+    font-size: 26px; letter-spacing: 3px; text-transform: uppercase; margin: 0;
+    background: var(--title-grad); -webkit-background-clip: text; background-clip: text;
+    color: transparent; text-shadow: 0 2px 10px var(--glow);
+  }
+  .topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+  .tierbadge {
+    font-size: 12px; letter-spacing: 2px; text-transform: uppercase; color: var(--bg0);
+    background: linear-gradient(180deg, var(--accent2), var(--accent));
+    padding: 6px 12px; border-radius: 20px; font-weight: 700;
+    box-shadow: 0 0 18px var(--glow);
+  }
+  .sub { color: var(--muted); font-size: 12px; letter-spacing: 1px; }
+
+  .panel {
+    background: linear-gradient(180deg, var(--panel), var(--panel2));
+    border: var(--frame); border-radius: 12px; padding: 14px 16px; position: relative;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.04), 0 8px 24px rgba(0,0,0,.35);
+  }
+  body[data-tier="3"] .panel, body[data-tier="4"] .panel { box-shadow: inset 0 1px 0 rgba(255,255,255,.05), 0 0 22px var(--glow); }
+  .panel h2 {
+    font-size: 13px; letter-spacing: 2px; text-transform: uppercase; color: var(--accent2);
+    margin: 0 0 12px; padding-bottom: 8px; border-bottom: 1px solid var(--line);
+    display: flex; align-items: center; gap: 8px;
+  }
+
+  /* character card */
+  .char { display: grid; grid-template-columns: 92px 1fr; gap: 16px; align-items: center; margin-bottom: 16px; }
+  .avatar {
+    width: 92px; height: 92px; border-radius: 14px; display: grid; place-items: center;
+    font-size: 44px; background: radial-gradient(circle at 50% 30%, var(--panel2), var(--slot));
+    border: 2px solid var(--accent); box-shadow: 0 0 24px var(--glow);
+  }
+  .lvl { font-size: 34px; font-weight: 800; color: var(--accent2); line-height: 1; }
+  .title { color: var(--muted); letter-spacing: 1px; text-transform: uppercase; font-size: 12px; }
+  .name { font-size: 20px; font-weight: 700; }
+  .bars { margin-top: 8px; display: grid; gap: 6px; }
+
+  .bar { position: relative; height: 16px; border-radius: 8px; background: var(--slot); border: 1px solid var(--line); overflow: hidden; }
+  .bar > span { position: absolute; inset: 0; width: 0; border-radius: 8px; transition: width .6s ease; }
+  .bar.xp > span { background: linear-gradient(90deg, var(--accent), var(--accent2)); }
+  .bar.rep > span { background: linear-gradient(90deg, #6a5acd, #a08be0); }
+  .barlabel { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin: 2px 2px 0; letter-spacing: 1px; }
+
+  .grid { display: grid; grid-template-columns: 1.1fr 1fr; gap: 16px; }
+  .grid.stats { grid-template-columns: repeat(4, 1fr); margin-bottom: 16px; }
+  @media (max-width: 820px) { .grid, .grid.stats { grid-template-columns: 1fr 1fr; } .char { grid-template-columns: 72px 1fr; } }
+  @media (max-width: 520px) { .grid, .grid.stats { grid-template-columns: 1fr; } }
+
+  .stat .num { font-size: 20px; font-weight: 800; }
+  .stat .cap { font-size: 11px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; }
+  .stat .bar { margin-top: 8px; height: 12px; }
+  .stat.protein .bar > span { background: linear-gradient(90deg,#a3324a,var(--hp)); }
+  .stat.calories .bar > span { background: linear-gradient(90deg,#b5691f,var(--kcal)); }
+  .stat.steps .bar > span { background: linear-gradient(90deg,#33704e,var(--steps)); }
+  .stat.gym .bar > span { background: linear-gradient(90deg,#345a80,var(--gym)); }
+
+  /* quests */
+  .quest { display: flex; align-items: center; gap: 10px; padding: 8px 4px; border-bottom: 1px dashed var(--line); }
+  .quest:last-child { border-bottom: 0; }
+  .quest .q-ico { font-size: 20px; width: 26px; text-align: center; }
+  .quest .q-body { flex: 1; }
+  .quest .q-top { display: flex; justify-content: space-between; font-size: 13px; }
+  .quest .q-bar { height: 8px; margin-top: 5px; }
+  .badge { font-size: 10px; letter-spacing: 1px; padding: 3px 8px; border-radius: 10px; text-transform: uppercase; font-weight: 700; }
+  .badge.done { background: rgba(76,159,112,.18); color: var(--ok); border: 1px solid var(--ok); }
+  .badge.pending { background: rgba(224,168,0,.14); color: var(--warn); border: 1px solid var(--warn); }
+  .badge.failed { background: rgba(209,73,91,.16); color: var(--bad); border: 1px solid var(--bad); }
+  .check { font-size: 18px; }
+  .side { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+
+  /* inventory grid */
+  .slots { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 10px; }
+  .slot {
+    background: var(--slot); border: 2px solid var(--line); border-radius: 10px; padding: 8px;
+    min-height: 84px; display: flex; flex-direction: column; justify-content: space-between; position: relative;
+  }
+  .slot .s-ico { font-size: 22px; }
+  .slot .s-name { font-size: 12px; font-weight: 700; }
+  .slot .s-qty { font-size: 11px; color: var(--muted); }
+  .slot.rar-empty { border-color: #4a4a55; opacity: .6; }
+  .slot.rar-low { border-color: var(--bad); box-shadow: 0 0 12px rgba(209,73,91,.3); }
+  .slot.rar-mid { border-color: var(--warn); }
+  .slot.rar-high { border-color: var(--steps); }
+  .slot.rar-epic { border-color: #9b6bd6; box-shadow: 0 0 14px rgba(155,107,214,.4); }
+  .slot.rar-legendary { border-color: #ff8a2b; box-shadow: 0 0 16px rgba(255,138,43,.45); animation: legend 2.4s ease-in-out infinite; }
+  .slot.locked { filter: grayscale(.7) brightness(.7); }
+  .slot .lock { position: absolute; top: 6px; right: 8px; font-size: 13px; }
+  @keyframes legend { 0%,100% { box-shadow: 0 0 12px rgba(255,138,43,.35);} 50% { box-shadow: 0 0 22px rgba(255,138,43,.65);} }
+
+  /* loot */
+  .loot { display: grid; gap: 6px; }
+  .loot .row { display: flex; justify-content: space-between; font-size: 13px; padding: 6px 4px; border-bottom: 1px dashed var(--line); }
+  .loot .row:last-child { border-bottom: 0; }
+  .loot .t { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .loot .m { flex: 1; padding: 0 10px; }
+  .loot .v { color: var(--accent2); font-variant-numeric: tabular-nums; }
+  .empty { color: var(--muted); font-size: 13px; font-style: italic; padding: 8px 2px; }
+
+  .buffs { display: flex; flex-wrap: wrap; gap: 8px; }
+  .buff { background: var(--slot); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; font-size: 12px; }
+  .buff b { color: var(--accent2); }
+  .buff.hot { border-color: var(--accent); box-shadow: 0 0 12px var(--glow); }
+
+  .boss {
+    margin: 0 0 16px; padding: 10px 14px; border-radius: 10px; text-align: center; font-weight: 800; letter-spacing: 2px;
+    text-transform: uppercase; color: #fff; background: linear-gradient(90deg,#7a1f2b,#d1495b,#7a1f2b);
+    box-shadow: 0 0 22px rgba(209,73,91,.5); animation: bgpulse 1.6s ease-in-out infinite alternate;
+  }
+  .foot { text-align: center; color: var(--muted); font-size: 11px; margin-top: 18px; letter-spacing: 1px; }
+  .tiertrack { font-size: 11px; color: var(--muted); margin-top: 6px; }
+</style>
+</head>
+<body data-tier="0">
+  <div class="wrap">
+    <div class="topbar">
+      <div>
+        <h1>MealSentry</h1>
+        <div class="sub">Character Sheet · Inventory · Quests</div>
+      </div>
+      <div style="text-align:right">
+        <div class="tierbadge" id="tierBadge">—</div>
+        <div class="tiertrack" id="tierTrack"></div>
+      </div>
+    </div>
+
+    <div id="boss"></div>
+
+    <section class="panel char-panel" style="margin-bottom:16px">
+      <div class="char">
+        <div class="avatar" id="avatar">⚔️</div>
+        <div>
+          <div style="display:flex; align-items:baseline; gap:10px">
+            <span class="lvl" id="lvl">1</span>
+            <span class="title" id="title">—</span>
+          </div>
+          <div class="name" id="name">—</div>
+          <div class="bars">
+            <div>
+              <div class="barlabel"><span>XP</span><span id="xpTxt"></span></div>
+              <div class="bar xp"><span id="xpBar"></span></div>
+            </div>
+            <div>
+              <div class="barlabel"><span>Respect</span><span id="repTxt"></span></div>
+              <div class="bar rep"><span id="repBar"></span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="grid stats" id="stats"></section>
+
+    <div class="grid">
+      <section class="panel">
+        <h2>📜 Quest Log — Σήμερα</h2>
+        <div id="quests"></div>
+        <div class="side" id="side"></div>
+      </section>
+
+      <section class="panel">
+        <h2>🎒 Inventory</h2>
+        <div class="slots" id="inv"></div>
+        <h2 style="margin-top:14px">✨ Special</h2>
+        <div class="slots" id="specials"></div>
+      </section>
+    </div>
+
+    <div class="grid" style="margin-top:16px">
+      <section class="panel">
+        <h2>🍖 Loot — Ό,τι έφαγες σήμερα</h2>
+        <div class="loot" id="loot"></div>
+      </section>
+      <section class="panel">
+        <h2>🔥 Buffs — Streaks</h2>
+        <div class="buffs" id="buffs"></div>
+      </section>
+    </div>
+
+    <div class="foot" id="foot">—</div>
+  </div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const pct = (c, m) => m > 0 ? Math.max(0, Math.min(100, (c / m) * 100)) : 0;
+const STREAK_ICON = { meals:"🍽️", protein:"🥩", gym:"🏋️", steps:"👟", sleep:"😴", weigh_in:"⚖️" };
+const STATE_BADGE = { DONE:"done", FAILED:"failed", PENDING:"pending", NAGGED_1:"pending", NAGGED_2:"pending", NAGGED_3:"pending" };
+const AVATARS = ["⚔️","🛡️","⚔️","🔱","👑"]; // by tier
+
+function render(d) {
+  const c = d.character, t = d.tier;
+  document.body.dataset.tier = t.index;
+  $("tierBadge").textContent = "Tier " + (t.index+1) + " · " + t.name;
+  $("avatar").textContent = AVATARS[t.index] || "⚔️";
+  $("lvl").textContent = "Lv " + c.level;
+  $("title").textContent = c.title;
+  $("name").textContent = c.name + "  ·  " + c.weight_kg + "kg";
+
+  const toNext = c.xp_to_next;
+  $("xpTxt").textContent = toNext == null ? c.xp + " (MAX)" : c.xp + " XP · " + toNext + " για next";
+  $("xpBar").style.width = (toNext == null ? 100 : pct(c.xp % 1000, (c.xp % 1000) + toNext)) + "%";
+  $("repTxt").textContent = c.respect + "/100 (" + c.respect_tier + ")";
+  $("repBar").style.width = c.respect + "%";
+
+  $("tierTrack").textContent = t.index < 4 ? ("Επόμενο tier στο Lv " + ((t.index+1)*2+1)) : "Μέγιστο tier";
+  $("boss").innerHTML = c.boss_week ? '<div class="boss">☠️ Boss Week — στόχοι +10%, XP ×2</div>' : "";
+
+  // stat bars
+  const S = d.stats;
+  const stat = (k, label, cls) => `
+    <div class="panel stat ${cls}">
+      <div class="cap">${label}</div>
+      <div class="num">${S[k].cur}<span style="color:var(--muted);font-size:13px">/${S[k].max}</span></div>
+      <div class="bar"><span style="width:${pct(S[k].cur,S[k].max)}%"></span></div>
+    </div>`;
+  $("stats").innerHTML =
+    stat("protein","Πρωτεΐνη (g)","protein") + stat("calories","Θερμίδες","calories") +
+    stat("steps","Βήματα","steps") + stat("gym","Gym / εβδ.","gym");
+
+  // quests
+  $("quests").innerHTML = d.quests.map(q => {
+    const right = q.kind === "check"
+      ? `<span class="check">${q.done ? "✅" : "⬜"}</span>`
+      : `<span class="badge ${q.done ? "done":"pending"}">${q.cur}/${q.max}</span>`;
+    const bar = q.kind === "bar"
+      ? `<div class="bar q-bar"><span style="width:${pct(q.cur,q.max)}%;background:linear-gradient(90deg,var(--accent),var(--accent2))"></span></div>` : "";
+    return `<div class="quest"><div class="q-ico">${q.icon}</div><div class="q-body">
+      <div class="q-top"><span>${q.label}</span>${right}</div>${bar}</div></div>`;
+  }).join("");
+  $("side").innerHTML = d.side_quests.map(s =>
+    `<span class="badge ${STATE_BADGE[s.state]||"pending"}">${s.label}</span>`).join("")
+    || '<span class="empty">Καμία προγραμματισμένη αποστολή ακόμη.</span>';
+
+  // inventory
+  const slot = (i) => `
+    <div class="slot rar-${i.rarity} ${i.locked?"locked":""}">
+      ${i.locked?'<span class="lock">🔒</span>':""}
+      <div class="s-ico">${i.ico}</div>
+      <div><div class="s-name">${i.name}</div><div class="s-qty">${i.qty}</div></div>
+    </div>`;
+  const invItems = d.inventory.map(x => ({
+    rarity:x.rarity, ico:"📦", name:x.item, locked:false,
+    qty: x.grams + "g" + (x.runout_date ? " · ⏳"+x.runout_date.slice(5) : "")
+  }));
+  $("inv").innerHTML = invItems.length ? invItems.map(slot).join("")
+    : '<span class="empty">Άδειο. Πρόσθεσε με /stock.</span>';
+
+  const sp = d.specials.map(s => s.kind === "consumable"
+    ? { rarity:"epic", ico:"🎟️", name:s.item, qty:"×"+(s.count||0), locked:(s.count||0)===0 }
+    : { rarity:"legendary", ico:"🐟", name:s.item, qty:s.locked?"Κλειδωμένο":"Ξεκλειδωμένο!", locked:s.locked });
+  $("specials").innerHTML = sp.map(slot).join("");
+
+  // loot
+  $("loot").innerHTML = d.loot.length ? d.loot.map(l =>
+    `<div class="row"><span class="t">${l.time}</span>
+      <span class="m">${l.name}${l.fraction!==1?" ×"+l.fraction:""}</span>
+      <span class="v">${l.kcal} kcal · ${l.protein}g</span></div>`).join("")
+    : '<div class="empty">Κανένα loot ακόμη σήμερα. Πάρε /ate.</div>';
+
+  // buffs
+  const buffs = Object.entries(d.streaks).filter(([,v]) => v.count > 0)
+    .map(([k,v]) => `<div class="buff ${v.count>=7?"hot":""}">${STREAK_ICON[k]||"⭐"} ${k}: <b>${v.count}</b>🔥 <span style="color:var(--muted)">(best ${v.best})</span></div>`);
+  $("buffs").innerHTML = buffs.join("") || '<span class="empty">Χωρίς ενεργά buffs. Χτίσε ένα streak.</span>';
+
+  $("foot").textContent = "Coach: Chad Coach · ενημερώθηκε " + new Date().toLocaleTimeString("el-GR");
+}
+
+async function poll() {
+  try {
+    const r = await fetch("/dashboard/data", { cache: "no-store" });
+    if (r.ok) render(await r.json());
+    else $("foot").textContent = "Σφάλμα φόρτωσης (" + r.status + ")";
+  } catch (e) { $("foot").textContent = "Ο server δεν αποκρίνεται."; }
+}
+poll();
+setInterval(poll, 15000);
+</script>
+</body>
+</html>

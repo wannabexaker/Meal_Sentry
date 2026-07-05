@@ -9,7 +9,9 @@ import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
 
+from . import paths
 from .config import load_config
 from .db import Database, init_db
 from .engine import facts, meals
@@ -39,6 +41,18 @@ app = FastAPI(title="MealSentry API", version="0.1.0", lifespan=lifespan)
 
 def _svc(app: FastAPI) -> Service:
     return app.state.service
+
+
+@app.get("/", include_in_schema=False)
+async def dashboard_page() -> FileResponse:
+    """Serve the MMORPG-style inventory dashboard."""
+    return FileResponse(paths.WEB_DIR / "dashboard.html")
+
+
+@app.get("/dashboard/data")
+async def dashboard_data() -> dict:
+    """Aggregated payload the dashboard polls: character, quests, inventory, loot, stats."""
+    return await _svc(app).dashboard()
 
 
 @app.get("/health")

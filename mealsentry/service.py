@@ -22,6 +22,38 @@ def _asdict(obj: Any) -> Any:
     return asdict(obj) if is_dataclass(obj) else obj
 
 
+# RPG dashboard helpers -----------------------------------------------------------------
+_RPG_TIER_NAMES = ["Χάλκινο", "Ασημένιο", "Χρυσό", "Επικό", "Θρυλικό"]
+_TASK_LABELS = {
+    "prep_morning": "Prep πρωί", "meal1": "Γεύμα 1", "meal2": "Γεύμα 2",
+    "steps": "Βήματα", "prep_evening": "Prep βράδυ", "shopping": "Ψώνια",
+}
+
+
+def _rpg_tier(level: int) -> dict:
+    """Visual tier from level: 1-2 Bronze .. 9-10 Legendary. Higher = more panels."""
+    idx = max(0, min(4, (level - 1) // 2))
+    return {"index": idx, "name": _RPG_TIER_NAMES[idx],
+            "charts_unlocked": level >= 2, "boss_unlocked": level >= 6}
+
+
+def _rarity(grams: float, days_left: float | None) -> str:
+    if grams <= 0:
+        return "empty"
+    if days_left is not None and days_left < 2:
+        return "low"
+    if days_left is not None and days_left < 5:
+        return "mid"
+    return "high"
+
+
+def _hhmm(ts: str) -> str:
+    try:
+        return datetime.fromisoformat(ts).strftime("%H:%M")
+    except ValueError:
+        return ""
+
+
 class Service:
     def __init__(self, db: Database, config: Config):
         self.db = db
@@ -204,3 +236,83 @@ class Service:
         warn_rows = await self.db.fetchall(
             "SELECT ts, task_key, level, text FROM warnings ORDER BY ts DESC LIMIT ?", (limit,))
         return {"meals": [dict(r) for r in meals_rows], "warnings": [dict(r) for r in warn_rows]}
+
+    # ------------------------------------------------------------------ RPG dashboard
+    async def dashboard(self, when: datetime | None = None) -> dict:
+        """Aggregate everything the MMORPG-style dashboard renders in one payload."""
+        when = when or self.now()
+        st = await self.status(when)
+        today, g = st["today"], st["game"]
+        d = date_str(when)
+        p = await self.profile()
+        tier = _rpg_tier(g["level"])
+
+        weighed = bool(await self.db.fetchval("SELECT 1 FROM weight_log WHERE date = ?", (d,)))
+        slept = await self.db.fetchone("SELECT hours FROM sleep_log WHERE date = ?", (d,))
+        sleep_done = bool(slept) and slept["hours"] >= p["sleep_target_hours"]
+
+        quests = [
+            {"id": "protein", "label": "Πρωτεΐνη", "icon": "🥩", "cur": round(today["protein_g"]),
+             "max": today["protein_floor_g"], "kind": "bar",
+             "done": today["protein_g"] >= today["protein_floor_g"]},
+            {"id": "calories", "label": "Θερμίδες", "icon": "🔥", "cur": round(today["kcal"]),
+             "max": today["kcal_target"], "kind": "bar",
+             "done": 0 < today["kcal"] <= today["kcal_target"]},
+            {"id": "steps", "label": "Βήματα", "icon": "👟", "cur": today["steps"],
+             "max": today["steps_target"], "kind": "bar",
+             "done": today["steps"] >= today["steps_target"]},
+            {"id": "gym", "label": "Γυμναστήριο", "icon": "🏋️", "cur": st["gym"]["sessions"],
+             "max": st["gym"]["target"], "kind": "bar",
+             "done": st["gym"]["sessions"] >= st["gym"]["target"]},
+            {"id": "weigh", "label": "Ζύγισμα", "icon": "⚖️", "kind": "check", "done": weighed},
+            {"id": "sleep", "label": "Ύπνος", "icon": "😴", "kind": "check", "done": sleep_done},
+        ]
+
+        task_rows = await self.db.fetchall(
+            "SELECT task_key, state FROM tasks WHERE date = ?", (d,))
+        side_quests = [{"id": r["task_key"], "label": _TASK_LABELS.get(r["task_key"], r["task_key"]),
+                        "state": r["state"]} for r in task_rows]
+
+        inventory_items = []
+        for item, grams in (await inventory.get_all_stock(self.db)).items():
+            pred = await inventory.predict_runout(self.db, item, when)
+            inventory_items.append({
+                "item": item, "grams": round(grams), "runout_date": pred.runout_date,
+                "burn": pred.burn_per_day, "rarity": _rarity(grams, pred.days_left)})
+
+        salmon = await self.db.fetchone("SELECT locked FROM meals WHERE id = 'salmon'")
+        specials = [
+            {"item": "Cheat token", "count": g["cheat_tokens"], "rarity": "epic", "kind": "consumable"},
+            {"item": "Σολομός", "locked": bool(salmon["locked"]) if salmon else True,
+             "rarity": "legendary", "kind": "reward"},
+        ]
+
+        loot_rows = await self.db.fetchall(
+            "SELECT ml.ts, COALESCE(m.name, ml.meal_id) name, ml.kcal, ml.protein_g, ml.fraction "
+            "FROM meal_log ml LEFT JOIN meals m ON ml.meal_id = m.id "
+            "WHERE ml.date = ? ORDER BY ml.ts", (d,))
+        loot = [{"time": _hhmm(r["ts"]), "name": r["name"], "kcal": round(r["kcal"]),
+                 "protein": round(r["protein_g"]), "fraction": r["fraction"]} for r in loot_rows]
+
+        return {
+            "character": {
+                "name": st["name"], "level": g["level"], "title": g["level_name"],
+                "xp": g["xp"], "xp_to_next": g["xp_to_next"],
+                "respect": g["respect"], "respect_tier": g["respect_tier"],
+                "cheat_tokens": g["cheat_tokens"], "boss_week": g["boss_week"],
+                "weight_kg": st["weight_kg"], "start_weight_kg": st["start_weight_kg"],
+            },
+            "tier": tier,
+            "stats": {
+                "protein": {"cur": round(today["protein_g"]), "max": today["protein_floor_g"]},
+                "calories": {"cur": round(today["kcal"]), "max": today["kcal_target"]},
+                "steps": {"cur": today["steps"], "max": today["steps_target"]},
+                "gym": {"cur": st["gym"]["sessions"], "max": st["gym"]["target"]},
+            },
+            "quests": quests,
+            "side_quests": side_quests,
+            "inventory": inventory_items,
+            "specials": specials,
+            "loot": loot,
+            "streaks": st["streaks"],
+        }

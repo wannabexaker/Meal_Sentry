@@ -10,6 +10,8 @@ from __future__ import annotations
 from pathlib import Path
 
 ROOT: Path = Path(__file__).resolve().parent.parent
+PACKAGE_DIR: Path = Path(__file__).resolve().parent
+WEB_DIR: Path = PACKAGE_DIR / "web"
 
 DATA_DIR: Path = ROOT / "data"
 COACHES_DIR: Path = ROOT / "coaches"
