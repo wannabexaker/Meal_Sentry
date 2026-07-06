@@ -103,6 +103,21 @@
         <div style="margin-top:10px"><button onclick="addFood()">➕ Πρόσθεσε</button></div>
       </details>
     </section>
+
+    <section class="panel">
+      <h2>🪙 Ανταμοιβές (κόστος σε coins)</h2>
+      <div id="rewards"></div>
+      <details style="margin-top:12px">
+        <summary>➕ Νέα ανταμοιβή</summary>
+        <div class="grid2">
+          <div><label>id (λατινικά)</label><input id="r_id"></div>
+          <div><label>Όνομα</label><input id="r_name"></div>
+          <div><label>Emoji</label><input id="r_emoji" value="🎁"></div>
+          <div><label>Κόστος (coins)</label><input id="r_cost" type="number" value="30"></div>
+        </div>
+        <div style="margin-top:10px"><button onclick="addReward()">➕ Πρόσθεσε</button></div>
+      </details>
+    </section>
   </div>
   <div class="toast" id="toast"></div>
 
@@ -173,7 +188,33 @@ async function addFood() {
   await loadFoods();
 }
 
-loadProfile(); loadFoods();
+async function loadRewards() {
+  const rs = await (await fetch("/api/rewards")).json();
+  q("rewards").innerHTML = rs.map(r => `
+    <div class="row">
+      <span class="nm">${r.emoji} ${r.name} <span class="cat">· ${r.kind}</span></span>
+      <input class="g" type="number" value="${r.cost}" id="rc_${r.id}">
+      <button class="ghost" onclick="saveRCost('${r.id}')">💾</button>
+      <button class="danger" onclick="delReward('${r.id}','${r.name.replace(/'/g,"")}')">🗑</button>
+    </div>`).join("");
+}
+async function saveRCost(id) {
+  await api("POST", "/api/rewards/" + id + "/cost", { cost: Number(q("rc_" + id).value) });
+  toast("✅ κόστος"); await loadRewards();
+}
+async function delReward(id, name) {
+  if (!confirm("Διαγραφή «" + name + "»;")) return;
+  await api("DELETE", "/api/rewards/" + id); toast("🗑 Διαγράφηκε"); await loadRewards();
+}
+async function addReward() {
+  const b = { id: q("r_id").value.trim(), name: q("r_name").value.trim(),
+              emoji: q("r_emoji").value || "🎁", cost: Number(q("r_cost").value) || 30, kind: "leisure" };
+  if (!b.id || !b.name) { toast("id & όνομα υποχρεωτικά", true); return; }
+  await api("POST", "/api/rewards", b); toast("✅ Προστέθηκε");
+  q("r_id").value = q("r_name").value = ""; await loadRewards();
+}
+
+loadProfile(); loadFoods(); loadRewards();
 </script>
 </body>
 </html>

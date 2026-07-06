@@ -1,0 +1,9 @@
+[
+  {"id": "araga",     "name": "Άραγμα",         "emoji": "🛋️", "cost": 25,  "kind": "leisure"},
+  {"id": "gaming",    "name": "Gaming session", "emoji": "🎮", "cost": 40,  "kind": "leisure"},
+  {"id": "cinema",    "name": "Σινεμά",         "emoji": "🎬", "cost": 50,  "kind": "leisure"},
+  {"id": "night_out", "name": "Έξοδος",         "emoji": "🍸", "cost": 100, "kind": "leisure"},
+  {"id": "concert",   "name": "Συναυλία",       "emoji": "🎵", "cost": 150, "kind": "leisure"},
+  {"id": "rw_halva",  "name": "Χαλβάς",         "emoji": "🍬", "cost": 20,  "kind": "cheat", "meal_id": "halva"},
+  {"id": "rw_ice",    "name": "Παγωτό",         "emoji": "🍨", "cost": 20,  "kind": "cheat", "meal_id": "ice_cream"}
+]

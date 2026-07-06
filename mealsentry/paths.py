@@ -21,6 +21,7 @@ DB_DIR: Path = ROOT / "db"
 MEALS_SEED: Path = DATA_DIR / "meals.json"
 FOODS_DB: Path = DATA_DIR / "foods.json"
 FACTS_SEED: Path = DATA_DIR / "facts_gr.json"
+REWARDS_SEED: Path = DATA_DIR / "rewards.json"
 SCHEMA_SQL: Path = DB_DIR / "schema.sql"
 
 CONFIG_FILE: Path = ROOT / "config.yaml"

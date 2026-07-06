@@ -1,21 +1,21 @@
 """Service layer orchestration: ate flow + floor award once, weight recompute, steps."""
 
-import pytest
-
-from mealsentry.engine import meals
+from mealsentry.engine import game
 
 
-async def test_treat_locked_until_protein_and_room(service, monday):
-    # Empty day → the cheat treat is locked (protein floor not met).
-    with pytest.raises(meals.MealLocked):
-        await service.ate("halva", monday)
-    # Hit the protein floor with calorie headroom (4 shakes = 176 g protein, 1280 kcal).
-    for _ in range(4):
-        await service.ate("shake", monday)
-    status = {t["id"]: t for t in await service.treat_status(monday)}
-    assert status["halva"]["available"] is True
-    res = await service.ate("halva", monday)  # now allowed
-    assert res["logged"]["kcal"] == 235
+async def test_coins_earned_and_reward_redeemed(service, db, monday):
+    # Logging meals earns coins (meal = +1 each).
+    await service.ate("chicken", monday)
+    await service.ate("beef", monday)
+    assert (await game.get_state(db))["coins"] >= 2
+    # A pricey reward is refused without enough coins.
+    assert (await service.redeem_reward("concert", monday))["ok"] is False
+    # Grant coins, redeem a cheat reward → it logs the linked meal's macros and spends coins.
+    await game.grant_coins(db, 50)
+    before = (await game.get_state(db))["coins"]
+    res = await service.redeem_reward("rw_halva", monday)
+    assert res["ok"] is True and res["meal"]["kcal"] == 235
+    assert res["coins_left"] == before - 20
 
 
 async def test_ate_awards_meal_and_floor_once(service, monday):

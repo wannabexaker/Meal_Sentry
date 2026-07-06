@@ -15,7 +15,7 @@ from typing import Any
 
 from .config import Config
 from .db import Database
-from .engine import foods, game, gym, inventory, math, meals, sleep
+from .engine import foods, game, gym, inventory, math, meals, rewards, sleep
 from .util import date_str
 
 
@@ -147,28 +147,29 @@ class Service:
         await self.db.kv_set(key, "1")
         return await game.award(self.db, event, when)
 
-    async def _treat_available(self, meal, when: datetime) -> tuple[bool, str]:
-        """A cheat treat unlocks when protein floor is hit AND there is calorie room for it."""
-        kcal, protein = await meals.today_totals(self.db, when)
-        targets = await self.compute_targets(when)
-        if protein < targets.protein_floor_g:
-            gap = targets.protein_floor_g - round(protein)
-            return False, f"🔒 «{meal.name}»: πιάσε πρώτα την πρωτεΐνη (λείπουν {gap}g)."
-        room = targets.calorie_target - kcal
-        if room < meal.kcal:
-            return False, (f"🔒 «{meal.name}»: δεν έχεις θερμιδικό περιθώριο "
-                           f"({round(room)} < {round(meal.kcal)} kcal).")
-        return True, ""
+    # ------------------------------------------------------------------ rewards economy
+    async def rewards_shop(self, when: datetime | None = None) -> dict:
+        coins = (await game.get_state(self.db))["coins"]
+        return {"coins": coins, "rewards": await rewards.list_rewards(self.db, coins)}
 
-    async def treat_status(self, when: datetime) -> list[dict]:
-        """Lock state of every cheat treat today (for the dashboard 'Special' slots)."""
-        out = []
-        for m in await meals.list_meals(self.db):
-            if "cheat" in m.tags:
-                available, reason = await self._treat_available(m, when)
-                out.append({"id": m.id, "name": m.name, "kcal": m.kcal,
-                            "available": available, "reason": reason})
-        return out
+    async def redeem_reward(self, reward_id: str, when: datetime) -> dict:
+        """Spend coins on a reward (cheat food logs macros; leisure just records it)."""
+        reward = await rewards.get_reward(self.db, reward_id)
+        if reward is None:
+            return {"ok": False, "reason": "Δεν υπάρχει αυτή η ανταμοιβή."}
+        coins = (await game.get_state(self.db))["coins"]
+        if coins < reward["cost"]:
+            return {"ok": False, "reason": f"Χρειάζεσαι {reward['cost']} 🪙 (έχεις {coins})."}
+        await game.spend_coins(self.db, reward["cost"])
+        await self.db.execute(
+            "INSERT INTO reward_log(ts, date, reward_id, name, cost) VALUES (?, ?, ?, ?, ?)",
+            (when.isoformat(timespec="seconds"), date_str(when), reward_id,
+             reward["name"], reward["cost"]))
+        meal = None
+        if reward["kind"] == "cheat" and reward["meal_id"]:
+            meal = await meals.log_meal(self.db, reward["meal_id"], when)
+        coins_left = (await game.get_state(self.db))["coins"]
+        return {"ok": True, "reward": reward, "coins_left": coins_left, "meal": meal}
 
     async def _after_food_log(self, when: datetime) -> dict:
         """Shared post-log bookkeeping: meal XP + once/day protein-floor award + today totals."""
@@ -219,11 +220,6 @@ class Service:
         return result
 
     async def ate(self, meal_id: str, when: datetime, fraction: float = 1.0) -> dict:
-        meal = await meals.get_meal(self.db, meal_id)
-        if "cheat" in meal.tags:
-            available, reason = await self._treat_available(meal, when)
-            if not available:
-                raise meals.MealLocked(reason)
         logged = await meals.log_meal(self.db, meal_id, when, fraction)
         meal_award = await game.award(self.db, "meal", when)
         kcal, protein = await meals.today_totals(self.db, when)
@@ -389,9 +385,7 @@ class Service:
             {"item": "Σολομός", "locked": bool(salmon["locked"]) if salmon else True,
              "rarity": "legendary", "kind": "reward"},
         ]
-        for t in await self.treat_status(when):
-            specials.append({"item": t["name"], "locked": not t["available"],
-                             "rarity": "treat", "kind": "treat", "reason": t["reason"]})
+        shop = await self.rewards_shop(when)   # {"coins", "rewards": [...]}
 
         loot_rows = await self.db.fetchall(
             "SELECT ml.ts, ml.note, ml.food_id, COALESCE(m.name, ml.meal_id) mname, "
@@ -408,10 +402,13 @@ class Service:
                 "name": st["name"], "level": g["level"], "title": g["level_name"],
                 "xp": g["xp"], "xp_to_next": g["xp_to_next"],
                 "respect": g["respect"], "respect_tier": g["respect_tier"],
-                "cheat_tokens": g["cheat_tokens"], "boss_week": g["boss_week"],
+                "cheat_tokens": g["cheat_tokens"], "coins": g["coins"],
+                "boss_week": g["boss_week"],
                 "weight_kg": st["weight_kg"], "start_weight_kg": st["start_weight_kg"],
             },
             "tier": tier,
+            "coins": g["coins"],
+            "rewards": shop,
             "stats": {
                 "protein": {"cur": round(today["protein_g"]), "max": today["protein_floor_g"]},
                 "calories": {"cur": round(today["kcal"]), "max": today["kcal_target"]},

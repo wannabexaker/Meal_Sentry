@@ -14,6 +14,7 @@ from ..util import date_str, week_bounds
 
 # --- XP economy (spec §8) ---
 XP_REWARDS = {"meal": 10, "protein_floor": 25, "gym": 40, "steps": 15, "sleep": 15, "weigh_in": 5}
+COIN_REWARDS = {"meal": 1, "protein_floor": 3, "gym": 5, "steps": 2, "sleep": 2, "weigh_in": 1}
 XP_PENALTIES = {"failed_task": 15, "ignored_escalation": 25, "failed_week": 50}
 RESPECT_REWARD = {"meal": 2, "protein_floor": 5, "gym": 6, "steps": 3, "sleep": 3, "weigh_in": 2}
 RESPECT_PENALTY = {"failed_task": 5, "ignored_escalation": 10, "failed_week": 20}
@@ -93,7 +94,8 @@ async def get_state(db: Database) -> dict:
         "xp": row["xp"], "level": level, "level_name": name,
         "xp_to_next": xp_to_next(row["xp"]), "respect": row["respect"],
         "respect_tier": respect_tier(row["respect"]),
-        "cheat_tokens": row["cheat_tokens"], "boss_week": bool(row["boss_week"]),
+        "cheat_tokens": row["cheat_tokens"], "coins": row["coins"],
+        "boss_week": bool(row["boss_week"]),
     }
 
 
@@ -145,10 +147,12 @@ async def award(db: Database, event: str, when: datetime, *, count_streak: bool 
                 unlocks.append(LEVEL_UNLOCKS[lvl])
 
     extra_tokens = 1 if "cheat_token" in unlocks else 0
+    coins_delta = int(COIN_REWARDS.get(event, 0) * (2 if boss else 1))
     await db.execute(
         "UPDATE game_state SET xp = ?, level = ?, respect = ?, "
-        "cheat_tokens = cheat_tokens + ?, updated_at = ? WHERE id = 1",
-        (new_xp, new_level, new_respect, extra_tokens, when.isoformat(timespec="seconds")),
+        "cheat_tokens = cheat_tokens + ?, coins = coins + ?, updated_at = ? WHERE id = 1",
+        (new_xp, new_level, new_respect, extra_tokens, coins_delta,
+         when.isoformat(timespec="seconds")),
     )
     return AwardResult(event, xp_delta, new_xp, new_level, level_name,
                        new_level > old_level, new_respect, unlocks)
@@ -187,6 +191,18 @@ async def spend_cheat_token(db: Database) -> bool:
 
 async def grant_cheat_token(db: Database, n: int = 1) -> None:
     await db.execute("UPDATE game_state SET cheat_tokens = cheat_tokens + ? WHERE id = 1", (n,))
+
+
+async def spend_coins(db: Database, amount: int) -> bool:
+    row = await _state_row(db)
+    if row["coins"] < amount:
+        return False
+    await db.execute("UPDATE game_state SET coins = coins - ? WHERE id = 1", (amount,))
+    return True
+
+
+async def grant_coins(db: Database, n: int) -> None:
+    await db.execute("UPDATE game_state SET coins = coins + ? WHERE id = 1", (n,))
 
 
 async def set_boss_week(db: Database, active: bool) -> None:

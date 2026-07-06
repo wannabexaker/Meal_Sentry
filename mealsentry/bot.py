@@ -450,6 +450,16 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         await _send_meal_picker(ctx, query)
     elif action == "recent":
         await _send_recent_foods(ctx, query)
+    elif action == "redeem":
+        res = await ctx.service.redeem_reward(arg, when)
+        if not res["ok"]:
+            await query.edit_message_text("❌ " + res["reason"])
+        else:
+            r = res["reward"]
+            extra = (f" (+{res['meal']['kcal']} kcal, {res['meal']['protein_g']}p)"
+                     if res["meal"] else "")
+            await query.edit_message_text(
+                f"🎉 {r['emoji']} {r['name']}! −{r['cost']}🪙 · μένουν {res['coins_left']}🪙{extra}")
     elif action == "fpick":
         await _send_food_grams(ctx, arg, query)
     elif action == "eatg":
@@ -592,6 +602,7 @@ BTN_STEPS = "👟 Βήματα"
 BTN_GYM = "🏋️ Γυμναστήριο"
 BTN_WEIGHT = "⚖️ Ζύγισμα"
 BTN_SLEEP = "😴 Ύπνος"
+BTN_REWARDS = "🪙 Ανταμοιβές"
 BTN_FACT = "🧠 Trivia"
 BTN_REPORT = "📊 Report"
 BTN_DASH = "🎒 Dashboard"
@@ -599,11 +610,11 @@ BTN_HELP = "❓ Βοήθεια"
 
 MAIN_MENU = ReplyKeyboardMarkup(
     [[BTN_STATUS, BTN_FOOD], [BTN_STEPS, BTN_GYM], [BTN_WEIGHT, BTN_SLEEP],
-     [BTN_FACT, BTN_REPORT], [BTN_DASH, BTN_HELP]],
+     [BTN_REWARDS, BTN_FACT], [BTN_REPORT, BTN_DASH], [BTN_HELP]],
     resize_keyboard=True, is_persistent=True,
 )
 MENU_LABELS = {BTN_STATUS, BTN_FOOD, BTN_STEPS, BTN_GYM, BTN_WEIGHT, BTN_SLEEP,
-               BTN_FACT, BTN_REPORT, BTN_DASH, BTN_HELP}
+               BTN_REWARDS, BTN_FACT, BTN_REPORT, BTN_DASH, BTN_HELP}
 
 STEPS_PRESETS = [[("8.000", "steps:8000"), ("10.000", "steps:10000")],
                  [("11.000", "steps:11000"), ("12.000", "steps:12000")],
@@ -615,7 +626,8 @@ FOOD_CATEGORIES = [
     ("protein", "🥩 Πρωτεΐνη"), ("carb", "🍚 Υδατ/κες"), ("dairy", "🧀 Γαλακτ."),
     ("veg", "🥗 Λαχανικά"), ("fruit", "🍎 Φρούτα"), ("fat", "🥑 Λίπη"),
     ("legume", "🫘 Όσπρια"), ("sauce", "🥫 Σάλτσες"), ("supplement", "💊 Συμπλ."),
-    ("snack", "🍫 Σνακ"), ("sweetener", "🍯 Γλυκ."), ("treat", "🍬 Treats"),
+    ("snack", "🍫 Σνακ"), ("sweetener", "🍯 Γλυκ."),
+    # 'treat' foods (halva/ice cream) are redeemed via the 🪙 rewards shop, not tapped here.
 ]
 
 
@@ -689,11 +701,26 @@ async def _log_food(ctx: AppContext, food_id: str, grams: float, reply) -> None:
         f"{today['protein_g']}/{today['protein_floor_g']}g πρωτεΐνη{extra}")
 
 
+async def _send_rewards_shop(ctx: AppContext, *, query=None, message=None) -> None:
+    """The 🪙 shop: spend coins on cheat foods + lifestyle rewards."""
+    shop = await ctx.service.rewards_shop()
+    rows = []
+    for r in shop["rewards"]:
+        lock = "" if r["affordable"] else "🔒 "
+        rows.append([(f"{lock}{r['emoji']} {r['name']} · {r['cost']}🪙", f"redeem:{r['id']}")])
+    text = (f"🪙 Ανταμοιβές — έχεις *{shop['coins']}* coins.\n"
+            "Κερδίζεις coins με γεύματα, gym, βήματα, ύπνο & πρωτεΐνη.")
+    if query is not None:
+        await query.edit_message_text(text, reply_markup=_markup(rows), parse_mode=ParseMode.MARKDOWN)
+    elif message is not None:
+        await message.reply_text(text, reply_markup=_markup(rows), parse_mode=ParseMode.MARKDOWN)
+
+
 async def _send_meal_picker(ctx: AppContext, query=None, *, message=None) -> None:
     """Tap-to-log buttons for enabled, unlocked meals/combos (no command needed)."""
     rows, row = [], []
     for m in await meals.list_meals(ctx.db):
-        if m.locked:
+        if m.locked or "cheat" in m.tags:   # cheat treats are redeemed via 🪙 rewards
             continue
         row.append((m.name, f"eat:{m.id}"))
         if len(row) == 2:
@@ -747,6 +774,8 @@ async def on_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     elif text == BTN_SLEEP:
         context.user_data["await"] = "sleep"
         await update.message.reply_text("😴 Στείλε: ώρα ύπνου + ξύπνημα (π.χ. 23:40 07:10).")
+    elif text == BTN_REWARDS:
+        await _send_rewards_shop(ctx, message=update.message)
     elif text == BTN_FACT:
         await cmd_fact(update, context)
     elif text == BTN_REPORT:

@@ -93,6 +93,7 @@ async def init_db(db: Database, config: Config) -> None:
     await seed_meals(db)
     await seed_facts(db)
     await seed_foods(db)
+    await seed_rewards(db)
 
 
 async def _migrate(db: Database) -> None:
@@ -108,6 +109,7 @@ async def _migrate(db: Database) -> None:
     adds = {
         "foods": [("default_g", "REAL NOT NULL DEFAULT 100")],
         "meal_log": [("food_id", "TEXT"), ("grams", "REAL")],
+        "game_state": [("coins", "INTEGER NOT NULL DEFAULT 0")],
     }
     for table, cols in adds.items():
         existing = await columns(table)
@@ -217,6 +219,21 @@ async def seed_foods(db: Database) -> None:
         """INSERT OR IGNORE INTO foods
            (id, name, category, kcal, protein, carbs, fat, default_g, aliases, custom)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        rows,
+    )
+
+
+async def seed_rewards(db: Database) -> None:
+    """Insert seed rewards (cheat + lifestyle) without overwriting user-added ones."""
+    data = json.loads(paths.REWARDS_SEED.read_text(encoding="utf-8"))
+    rows = [
+        (r["id"], r["name"], r.get("emoji", "🎁"), int(r["cost"]),
+         r.get("kind", "leisure"), r.get("meal_id"), 0)
+        for r in data
+    ]
+    await db.executemany(
+        "INSERT OR IGNORE INTO rewards(id, name, emoji, cost, kind, meal_id, custom) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
         rows,
     )
 

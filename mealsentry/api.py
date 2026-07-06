@@ -15,7 +15,7 @@ from pydantic import BaseModel
 from . import paths
 from .config import load_config
 from .db import Database, init_db
-from .engine import facts, foods, meals
+from .engine import facts, foods, meals, rewards
 from .service import Service
 from .token import verify_token
 
@@ -183,6 +183,38 @@ async def api_food_default_g(food_id: str, grams: float = Body(..., embed=True))
 async def api_delete_food(food_id: str) -> dict:
     await foods.delete_food(app.state.db, food_id)
     return {"deleted": food_id}
+
+
+class RewardIn(BaseModel):
+    id: str
+    name: str
+    cost: int
+    emoji: str = "🎁"
+    kind: str = "leisure"
+    meal_id: str | None = None
+
+
+@app.get("/api/rewards")
+async def api_rewards() -> list[dict]:
+    return await rewards.list_rewards(app.state.db)
+
+
+@app.post("/api/rewards", dependencies=[Depends(require_token)])
+async def api_add_reward(body: RewardIn) -> dict:
+    return await rewards.add_reward(app.state.db, body.id, body.name, body.cost,
+                                    emoji=body.emoji, kind=body.kind, meal_id=body.meal_id)
+
+
+@app.post("/api/rewards/{reward_id}/cost", dependencies=[Depends(require_token)])
+async def api_reward_cost(reward_id: str, cost: int = Body(..., embed=True)) -> dict:
+    await rewards.set_cost(app.state.db, reward_id, cost)
+    return {"id": reward_id, "cost": cost}
+
+
+@app.delete("/api/rewards/{reward_id}", dependencies=[Depends(require_token)])
+async def api_delete_reward(reward_id: str) -> dict:
+    await rewards.delete_reward(app.state.db, reward_id)
+    return {"deleted": reward_id}
 
 
 def main() -> None:

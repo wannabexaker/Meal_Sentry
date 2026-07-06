@@ -144,8 +144,30 @@ CREATE TABLE IF NOT EXISTS game_state (
     level        INTEGER NOT NULL DEFAULT 1,
     respect      INTEGER NOT NULL DEFAULT 50,   -- 0..100, drives tone tier
     cheat_tokens INTEGER NOT NULL DEFAULT 0,
+    coins        INTEGER NOT NULL DEFAULT 0,    -- spendable economy (rewards shop)
     boss_week    INTEGER NOT NULL DEFAULT 0,
     updated_at   TEXT NOT NULL
+);
+
+-- Spendable rewards: cheat foods + lifestyle (άραγμα/gaming/συναυλίες/έξοδοι). Editable.
+CREATE TABLE IF NOT EXISTS rewards (
+    id      TEXT PRIMARY KEY,
+    name    TEXT NOT NULL,
+    emoji   TEXT NOT NULL DEFAULT '🎁',
+    cost    INTEGER NOT NULL,
+    kind    TEXT NOT NULL DEFAULT 'leisure',  -- leisure | cheat
+    meal_id TEXT,                             -- cheat rewards log this meal's macros
+    enabled INTEGER NOT NULL DEFAULT 1,
+    custom  INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS reward_log (
+    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts        TEXT NOT NULL,
+    date      TEXT NOT NULL,
+    reward_id TEXT NOT NULL,
+    name      TEXT NOT NULL,
+    cost      INTEGER NOT NULL
 );
 
 -- Per-category streaks (meals, protein, gym, steps, sleep, weigh_in).

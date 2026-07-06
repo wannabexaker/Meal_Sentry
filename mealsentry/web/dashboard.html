@@ -229,6 +229,11 @@
       </section>
     </div>
 
+    <section class="panel" style="margin-top:16px">
+      <h2>🪙 Ανταμοιβές — <span id="coins">0</span> coins</h2>
+      <div class="slots" id="rewards"></div>
+    </section>
+
     <div class="foot" id="foot">—</div>
   </div>
 
@@ -316,6 +321,16 @@ function render(d) {
   const buffs = Object.entries(d.streaks).filter(([,v]) => v.count > 0)
     .map(([k,v]) => `<div class="buff ${v.count>=7?"hot":""}">${STREAK_ICON[k]||"⭐"} ${k}: <b>${v.count}</b>🔥 <span style="color:var(--muted)">(best ${v.best})</span></div>`);
   $("buffs").innerHTML = buffs.join("") || '<span class="empty">Χωρίς ενεργά buffs. Χτίσε ένα streak.</span>';
+
+  // coins + rewards shop
+  $("coins").textContent = d.coins;
+  const rewards = (d.rewards && d.rewards.rewards) || [];
+  $("rewards").innerHTML = rewards.map(r => `
+    <div class="slot ${r.affordable ? "rar-high" : "rar-empty"} ${r.affordable ? "" : "locked"}">
+      ${r.affordable ? "" : '<span class="lock">🔒</span>'}
+      <div class="s-ico">${r.emoji}</div>
+      <div><div class="s-name">${r.name}</div><div class="s-qty">${r.cost} 🪙</div></div>
+    </div>`).join("") || '<span class="empty">—</span>';
 
   $("foot").textContent = "Coach: Chad Coach · ενημερώθηκε " + new Date().toLocaleTimeString("el-GR");
 }
