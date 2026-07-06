@@ -76,10 +76,9 @@
         <input id="search" placeholder="🔎 φίλτρο..." oninput="render()">
       </div>
       <div id="foods"></div>
-      <details style="margin-top:12px">
-        <summary>➕ Νέο τρόφιμο</summary>
+      <details id="foodform" style="margin-top:12px">
+        <summary id="foodform_title">➕ Νέο τρόφιμο</summary>
         <div class="grid2">
-          <div><label>id (λατινικά)</label><input id="f_id"></div>
           <div><label>Όνομα</label><input id="f_name"></div>
           <div><label>Κατηγορία</label>
             <select id="f_category">
@@ -92,15 +91,16 @@
               <option value="other">other</option>
             </select></div>
           <div><label>default γραμμάρια</label><input id="f_default_g" type="number" value="100"></div>
-        </div>
-        <div class="grid2">
           <div><label>kcal /100g</label><input id="f_kcal" type="number"></div>
           <div><label>protein /100g</label><input id="f_protein" type="number"></div>
           <div><label>carbs /100g</label><input id="f_carbs" type="number" value="0"></div>
           <div><label>fat /100g</label><input id="f_fat" type="number" value="0"></div>
         </div>
         <label>aliases (χωρισμένα με κόμμα)</label><input id="f_aliases" placeholder="π.χ. γυρος, gyros">
-        <div style="margin-top:10px"><button onclick="addFood()">➕ Πρόσθεσε</button></div>
+        <div style="margin-top:10px">
+          <button onclick="saveFood()">💾 Αποθήκευση</button>
+          <button class="ghost" onclick="resetFoodForm()">Καθαρισμός</button>
+        </div>
       </details>
     </section>
 
@@ -125,6 +125,7 @@
 const TOKEN = (location.pathname.split("/d/")[1] || "").replace(/\/$/, "");
 const q = (id) => document.getElementById(id);
 let FOODS = [];
+let EDIT_ID = null;
 
 function toast(msg, err) {
   const t = q("toast"); t.textContent = msg; t.className = "toast show" + (err ? " err" : "");
@@ -163,6 +164,8 @@ function render() {
       <span class="nm">${x.name} <span class="cat">· ${x.category} · ${Math.round(x.kcal)}kcal/${x.protein}p</span></span>
       <input class="g" type="number" value="${Math.round(x.default_g)}" id="g_${x.id}">
       <button class="ghost" onclick="saveG('${x.id}')">💾 g</button>
+      <button class="ghost" onclick="editFood('${x.id}')">✏️</button>
+      <button class="ghost" onclick="dupFood('${x.id}')">⎘</button>
       <button class="danger" onclick="delFood('${x.id}','${x.name.replace(/'/g,"")}')">🗑</button>
     </div>`).join("") || '<div class="cat">Κανένα.</div>';
 }
@@ -174,18 +177,40 @@ async function delFood(id, name) {
   if (!confirm("Διαγραφή «" + name + "»;")) return;
   await api("DELETE", "/api/foods/" + id); toast("🗑 Διαγράφηκε"); await loadFoods();
 }
-async function addFood() {
+function resetFoodForm() {
+  EDIT_ID = null;
+  q("foodform_title").textContent = "➕ Νέο τρόφιμο";
+  q("f_name").value = q("f_kcal").value = q("f_protein").value = q("f_aliases").value = "";
+  q("f_carbs").value = q("f_fat").value = "0"; q("f_default_g").value = "100";
+}
+function editFood(id) {
+  const x = FOODS.find(f => f.id === id); if (!x) return;
+  EDIT_ID = id;
+  q("foodform_title").textContent = "✏️ Επεξεργασία: " + x.name;
+  q("f_name").value = x.name; q("f_category").value = x.category;
+  q("f_default_g").value = Math.round(x.default_g);
+  q("f_kcal").value = x.kcal; q("f_protein").value = x.protein;
+  q("f_carbs").value = x.carbs; q("f_fat").value = x.fat;
+  q("f_aliases").value = (x.aliases || []).join(", ");
+  q("foodform").open = true; q("foodform").scrollIntoView();
+}
+async function dupFood(id) {
+  const d = await api("POST", "/api/foods/" + id + "/duplicate");
+  toast("⎘ Αντιγράφηκε: " + d.name); await loadFoods();
+}
+async function saveFood() {
   const body = {
-    id: q("f_id").value.trim(), name: q("f_name").value.trim(), category: q("f_category").value,
+    name: q("f_name").value.trim(), category: q("f_category").value,
     kcal: Number(q("f_kcal").value), protein: Number(q("f_protein").value),
     carbs: Number(q("f_carbs").value) || 0, fat: Number(q("f_fat").value) || 0,
     default_g: Number(q("f_default_g").value) || 100,
     aliases: q("f_aliases").value.split(",").map(s => s.trim()).filter(Boolean),
   };
-  if (!body.id || !body.name) { toast("id & όνομα υποχρεωτικά", true); return; }
-  await api("POST", "/api/foods", body); toast("✅ Προστέθηκε");
-  q("f_id").value = q("f_name").value = q("f_kcal").value = q("f_protein").value = "";
-  await loadFoods();
+  if (EDIT_ID) body.id = EDIT_ID;   // edit → upsert; else auto-generate a unique id
+  if (!body.name) { toast("Όνομα υποχρεωτικό", true); return; }
+  await api("POST", "/api/foods", body);
+  toast(EDIT_ID ? "✅ Ενημερώθηκε" : "✅ Προστέθηκε");
+  resetFoodForm(); await loadFoods();
 }
 
 async function loadRewards() {

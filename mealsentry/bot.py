@@ -681,13 +681,17 @@ async def _send_food_grams(ctx: AppContext, food_id: str, query) -> None:
         await query.edit_message_text("Δεν βρέθηκε το τρόφιμο.")
         return
     d = food["default_g"]
+    recent = await foods.last_grams(ctx.db, food_id)   # remember what you usually log
     g = lambda x: int(round(x))  # noqa: E731
-    rows = [
-        [(f"✅ {g(d)}g", f"eatg:{food_id}:{g(d)}"), (f"½ · {g(d*0.5)}g", f"eatg:{food_id}:{g(d*0.5)}")],
-        [(f"×1.5 · {g(d*1.5)}g", f"eatg:{food_id}:{g(d*1.5)}"),
-         (f"×2 · {g(d*2)}g", f"eatg:{food_id}:{g(d*2)}")],
-        [("✏️ Άλλα γραμμάρια", f"fgcustom:{food_id}")],
-    ]
+    base = recent or d
+    top = f"✅ {g(base)}g" + (" (πρόσφατο)" if recent and g(recent) != g(d) else "")
+    rows = [[(top, f"eatg:{food_id}:{g(base)}")]]
+    if recent and g(recent) != g(d):
+        rows.append([(f"{g(d)}g (default)", f"eatg:{food_id}:{g(d)}")])
+    rows.append([(f"½ · {g(base*0.5)}g", f"eatg:{food_id}:{g(base*0.5)}"),
+                 (f"×1.5 · {g(base*1.5)}g", f"eatg:{food_id}:{g(base*1.5)}")])
+    rows.append([(f"×2 · {g(base*2)}g", f"eatg:{food_id}:{g(base*2)}"),
+                 ("✏️ Άλλα", f"fgcustom:{food_id}")])
     await query.edit_message_text(f"🍽️ {food['name']} — πόσα γραμμάρια;", reply_markup=_markup(rows))
 
 

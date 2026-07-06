@@ -8,10 +8,20 @@ and by the natural-language parser. Replaces the old static-JSON lookup that liv
 
 from __future__ import annotations
 
+import re
+import secrets
 import unicodedata
 from dataclasses import dataclass
 
 from ..db import Database
+
+
+def slug_id(name: str) -> str:
+    """A latin slug for an auto id; falls back to a short random token for Greek-only names."""
+    nfd = unicodedata.normalize("NFD", name.lower())
+    ascii_ish = "".join(c for c in nfd if unicodedata.category(c) != "Mn")
+    slug = re.sub(r"[^a-z0-9]+", "_", ascii_ish).strip("_")[:32]
+    return slug or ("f_" + secrets.token_hex(3))
 
 
 def normalize(text: str) -> str:
@@ -169,6 +179,39 @@ async def add_food(
 
 async def set_default_g(db: Database, food_id: str, grams: float) -> None:
     await db.execute("UPDATE foods SET default_g = ? WHERE id = ?", (grams, food_id))
+
+
+async def unique_food_id(db: Database, base: str) -> str:
+    fid, n = base, 1
+    while await db.fetchval("SELECT 1 FROM foods WHERE id = ?", (fid,)):
+        n += 1
+        fid = f"{base}_{n}"
+    return fid
+
+
+async def create_food(db: Database, name: str, kcal: float, protein: float,
+                      carbs: float = 0.0, fat: float = 0.0, *, category: str = "other",
+                      default_g: float = 100, aliases: list[str] | None = None) -> dict:
+    """Add a new food with an auto-generated unique id (user never types the id)."""
+    fid = await unique_food_id(db, slug_id(name))
+    return await add_food(db, fid, name, kcal, protein, carbs, fat,
+                          category=category, default_g=default_g, aliases=aliases)
+
+
+async def duplicate_food(db: Database, food_id: str) -> dict | None:
+    src = await get_food(db, food_id)
+    if src is None:
+        return None
+    return await create_food(db, src["name"] + " (copy)", src["kcal"], src["protein"],
+                             src["carbs"], src["fat"], category=src["category"],
+                             default_g=src["default_g"], aliases=src["aliases"])
+
+
+async def last_grams(db: Database, food_id: str) -> float | None:
+    """Most-recently-logged grams for a food (so the picker defaults to what you usually eat)."""
+    return await db.fetchval(
+        "SELECT grams FROM meal_log WHERE food_id = ? AND grams IS NOT NULL "
+        "ORDER BY ts DESC LIMIT 1", (food_id,))
 
 
 async def delete_food(db: Database, food_id: str) -> None:

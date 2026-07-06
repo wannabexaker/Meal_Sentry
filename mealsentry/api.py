@@ -132,7 +132,7 @@ class ProfileIn(BaseModel):
 
 
 class FoodIn(BaseModel):
-    id: str
+    id: str | None = None   # omit to auto-generate a unique id
     name: str
     category: str = "other"
     kcal: float
@@ -168,9 +168,21 @@ async def api_profile(body: ProfileIn) -> dict:
 
 @app.post("/api/foods", dependencies=[Depends(require_token)])
 async def api_add_food(body: FoodIn) -> dict:
-    return await foods.add_food(
-        app.state.db, body.id, body.name, body.kcal, body.protein, body.carbs, body.fat,
+    if body.id:   # explicit id → upsert (used when editing an existing food)
+        return await foods.add_food(
+            app.state.db, body.id, body.name, body.kcal, body.protein, body.carbs, body.fat,
+            category=body.category, default_g=body.default_g, aliases=body.aliases)
+    return await foods.create_food(   # no id → auto-generate a unique one
+        app.state.db, body.name, body.kcal, body.protein, body.carbs, body.fat,
         category=body.category, default_g=body.default_g, aliases=body.aliases)
+
+
+@app.post("/api/foods/{food_id}/duplicate", dependencies=[Depends(require_token)])
+async def api_duplicate_food(food_id: str) -> dict:
+    dup = await foods.duplicate_food(app.state.db, food_id)
+    if dup is None:
+        raise HTTPException(status_code=404, detail="food not found")
+    return dup
 
 
 @app.post("/api/foods/{food_id}/default_g", dependencies=[Depends(require_token)])
