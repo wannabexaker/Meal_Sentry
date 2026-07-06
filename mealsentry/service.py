@@ -186,6 +186,19 @@ class Service:
             "floor_award": _asdict(floor_award) if floor_award else None,
         }
 
+    async def resolve_query(self, query: str) -> tuple[str | None, str | None]:
+        """Fuzzy-map free text to a loggable: ('food', id) or ('combo', id) or (None, None).
+
+        Food-first (granular is the primary catalog); combos are the fallback.
+        """
+        food = await foods.find_food(self.db, query)
+        if food:
+            return "food", food["id"]
+        meal = await meals.find_meal(self.db, query)
+        if meal:
+            return "combo", meal.id
+        return None, None
+
     async def eat_food(self, food_id: str, when: datetime, grams: float | None = None) -> dict:
         """Log a single weighed food by grams (default portion if grams is None)."""
         food = await foods.get_food(self.db, food_id)

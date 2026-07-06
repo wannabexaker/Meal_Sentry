@@ -38,10 +38,21 @@ def month_bounds(value: str | date | datetime) -> tuple[str, str]:
 
 
 def parse_hhmm(text: str) -> tuple[int, int]:
-    """Parse 'HH:MM' (or 'H.MM') into (hour, minute); raises ValueError on garbage."""
-    cleaned = text.strip().replace(".", ":")
-    hh, mm = cleaned.split(":")
-    hour, minute = int(hh), int(mm)
+    """Parse a time into (hour, minute). Accepts 'HH:MM', 'H.MM', and bare digits:
+    '2340'→23:40, '0000'→00:00, '1750'→17:50, '730'→7:30, '7'→7:00.
+    """
+    cleaned = text.strip().replace(".", ":").lower().replace("h", ":")
+    if ":" in cleaned:
+        hh, _, mm = cleaned.partition(":")
+        hour, minute = int(hh), int(mm or 0)
+    else:
+        digits = "".join(c for c in cleaned if c.isdigit())
+        if not digits:
+            raise ValueError(f"Invalid time: {text}")
+        if len(digits) <= 2:              # hour only
+            hour, minute = int(digits), 0
+        else:                              # HMM / HHMM
+            hour, minute = int(digits[:-2]), int(digits[-2:])
     if not (0 <= hour <= 23 and 0 <= minute <= 59):
         raise ValueError(f"Invalid time: {text}")
     return hour, minute

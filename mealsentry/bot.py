@@ -33,7 +33,7 @@ from .config import Config, load_config
 from .db import Database, init_db
 from .engine import facts, foods, game, meals, nag
 from .paths import ROOT
-from .scheduler import NagScheduler
+from .scheduler import TASK_SPECS, NagScheduler
 from .service import Service
 from .tone import Coach
 
@@ -165,40 +165,40 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 @guard
 async def cmd_ate(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Log by free text: /ate κοτοπουλο [grams]. Fuzzy-resolves a food or a combo."""
     ctx = _ctx(context)
     if not context.args:
-        await update.message.reply_text("Χρήση: /ate <meal_id> [μερίδα]. Δες /meals.")
+        await _send_food_categories(ctx, message=update.message)
         return
-    meal_id = context.args[0]
-    fraction = 1.0
-    if len(context.args) > 1:
+    args = list(context.args)
+    qty = None
+    if len(args) > 1:
         try:
-            fraction = float(context.args[1].replace(",", "."))
+            qty = float(args[-1].replace(",", "."))
+            args = args[:-1]
         except ValueError:
-            fraction = 1.0
+            qty = None
+    query = " ".join(args)
+    when = ctx.service.now()
+    kind, ident = await ctx.service.resolve_query(query)
     try:
-        res = await ctx.service.ate(meal_id, ctx.service.now(), fraction)
-    except meals.MealLocked as e:
+        if kind == "food":
+            await _log_food(ctx, ident, qty, update.message.reply_text)
+            await _confirm_open_meal_task(ctx)
+        elif kind == "combo":
+            res = await ctx.service.ate(ident, when, qty or 1.0)
+            await _confirm_open_meal_task(ctx)
+            lg = res["logged"]
+            extra = (f"\n💪 Protein floor! +{res['floor_award']['xp_delta']} XP"
+                     if res["floor_award"] else "")
+            await update.message.reply_text(
+                f"✅ {lg['name']} ×{lg['fraction']}: {lg['kcal']} kcal, "
+                f"{lg['protein_g']}g (+{res['award']['xp_delta']} XP)" + extra)
+        else:
+            await update.message.reply_text(f"🤔 Δεν βρήκα «{query}». Διάλεξε από το μενού:")
+            await _send_food_categories(ctx, message=update.message)
+    except (meals.MealLocked, meals.MealCapReached, meals.MealNotFound) as e:
         await update.message.reply_text(str(e))
-        return
-    except meals.MealCapReached as e:
-        await update.message.reply_text(f"{e}\nΕναλλακτικά: {e.alternative}")
-        return
-    except meals.MealNotFound as e:
-        await update.message.reply_text(str(e))
-        return
-    # close the nearest open meal task, if any
-    await _confirm_open_meal_task(ctx)
-    logged, today = res["logged"], res["today"]
-    xp = res["award"]["xp_delta"]
-    extra = ""
-    if res["floor_award"]:
-        extra = f"\n💪 Protein floor! +{res['floor_award']['xp_delta']} XP"
-    await update.message.reply_text(
-        f"✅ {logged['name']} ×{logged['fraction']}: {logged['kcal']} kcal, "
-        f"{logged['protein_g']}g πρωτεΐνη (+{xp} XP)\n"
-        f"Σύνολο σήμερα: {today['kcal']} kcal, {today['protein_g']}/"
-        f"{today['protein_floor_g']}g πρωτεΐνη{extra}")
 
 
 async def _confirm_open_meal_task(ctx: AppContext) -> None:
@@ -211,8 +211,15 @@ async def _confirm_open_meal_task(ctx: AppContext) -> None:
 
 @guard
 async def cmd_skip(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    meal_id = context.args[0] if context.args else "?"
-    await update.message.reply_text(f"⏭ Skipped {meal_id}. Χωρίς XP, χωρίς penalty.")
+    """Tap-driven skip — no need to remember meal names; shows today's open reminders."""
+    ctx = _ctx(context)
+    open_rows = await nag.open_tasks(ctx.db, ctx.service.now())
+    if not open_rows:
+        await update.message.reply_text("👍 Καμία ανοιχτή ειδοποίηση για παράλειψη.")
+        return
+    labels = {k: v["label"] for k, v in TASK_SPECS.items()}
+    rows = [[(labels.get(r["task_key"], r["task_key"]), f"skip:{r['task_key']}")] for r in open_rows]
+    await update.message.reply_text("⏭ Τι να παραλείψω;", reply_markup=_markup(rows))
 
 
 @guard

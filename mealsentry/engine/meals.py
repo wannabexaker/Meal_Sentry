@@ -9,6 +9,7 @@ from datetime import datetime
 
 from ..db import Database
 from ..util import date_str, week_bounds
+from .foods import normalize
 
 YOGURT_BOMB_ID = "yogurt_bomb"
 HONEY_VARIANT_NOTE = "Variant 25g μέλι αντί 50g (−~80 kcal)"
@@ -72,6 +73,20 @@ async def list_meals(db: Database, *, include_disabled: bool = False) -> list[Me
     sql += " ORDER BY locked, name"
     rows = await db.fetchall(sql)
     return [_row_to_meal(r) for r in rows]
+
+
+async def find_meal(db: Database, query: str) -> Meal | None:
+    """Fuzzy-resolve a combo/meal by id, name, or substring (accent-insensitive)."""
+    norm = normalize(query)
+    rows = await db.fetchall("SELECT * FROM meals WHERE enabled = 1")
+    for r in rows:  # exact id or name first
+        if r["id"] == query or normalize(r["name"]) == norm:
+            return _row_to_meal(r)
+    for r in rows:  # then substring either way
+        nm = normalize(r["name"])
+        if norm and (norm in nm or nm in norm):
+            return _row_to_meal(r)
+    return None
 
 
 async def weekly_count(db: Database, meal_id: str, when: datetime) -> int:

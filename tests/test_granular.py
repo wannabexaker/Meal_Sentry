@@ -34,6 +34,13 @@ async def test_set_default_g(db, service, monday):
     assert r["logged"]["grams"] == 200
 
 
+async def test_resolve_query_fuzzy(service):
+    assert await service.resolve_query("κοτοπουλο") == ("food", "chicken_breast")
+    assert await service.resolve_query("στηθος κοτοπουλο") == ("food", "chicken_breast")
+    assert await service.resolve_query("shake") == ("combo", "shake")   # combo fallback
+    assert await service.resolve_query("ασδφ ξψω") == (None, None)
+
+
 async def test_recent_first_ordering(db, service, monday):
     from datetime import timedelta
     await service.eat_food("banana", monday)
