@@ -8,6 +8,7 @@ engine modules lives here so it is written once.
 
 from __future__ import annotations
 
+import secrets
 from dataclasses import asdict, is_dataclass
 from datetime import datetime, timedelta
 from typing import Any
@@ -66,6 +67,32 @@ class Service:
     async def profile(self) -> dict:
         row = await self.db.fetchone("SELECT * FROM user_profile WHERE id = 1")
         return dict(row) if row else {}
+
+    _PROFILE_FIELDS = {
+        "name", "sex", "age", "height_cm", "weight_kg", "start_weight_kg", "steps_target",
+        "gym_target_sessions", "sleep_target_hours", "protein_factor", "deficit_kcal",
+    }
+
+    async def update_profile(self, **fields) -> dict:
+        sets = {k: v for k, v in fields.items() if k in self._PROFILE_FIELDS and v is not None}
+        if sets:
+            cols = ", ".join(f"{k} = ?" for k in sets)
+            await self.db.execute(
+                f"UPDATE user_profile SET {cols}, updated_at = ? WHERE id = 1",
+                (*sets.values(), self.now().isoformat(timespec="seconds")))
+        return await self.profile()
+
+    async def dashboard_secret(self) -> bytes:
+        """Per-install HMAC secret for control-page tokens (generated once, stored in kv)."""
+        hexs = await self.db.kv_get("dashboard_secret")
+        if not hexs:
+            hexs = secrets.token_hex(32)
+            await self.db.kv_set("dashboard_secret", hexs)
+        return bytes.fromhex(hexs)
+
+    async def make_dashboard_token(self) -> str:
+        from .token import make_token
+        return make_token(await self.dashboard_secret())
 
     async def _avg_steps_7d(self, when: datetime) -> float:
         start = (datetime.fromisoformat(date_str(when)).date() - timedelta(days=6)).isoformat()

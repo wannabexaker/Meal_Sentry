@@ -8,14 +8,16 @@ from __future__ import annotations
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Body, Depends, FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse
+from pydantic import BaseModel
 
 from . import paths
 from .config import load_config
 from .db import Database, init_db
-from .engine import facts, meals
+from .engine import facts, foods, meals
 from .service import Service
+from .token import verify_token
 
 log = logging.getLogger("mealsentry.api")
 
@@ -108,6 +110,79 @@ async def random_fact() -> dict:
         raise HTTPException(status_code=404, detail="no facts")
     return {"id": fact.id, "title": fact.title, "body": fact.body,
             "verdict": fact.verdict, "stars": facts.verdict_stars(fact.verdict)}
+
+
+# --------------------------------------------------------------------------- control page
+async def require_token(t: str = Query(..., description="control-page token")) -> None:
+    secret = await app.state.service.dashboard_secret()
+    if not verify_token(secret, t):
+        raise HTTPException(status_code=403, detail="Ο σύνδεσμος έληξε. Στείλε /dashboard στο bot.")
+
+
+class ProfileIn(BaseModel):
+    name: str | None = None
+    age: int | None = None
+    height_cm: float | None = None
+    weight_kg: float | None = None
+    steps_target: int | None = None
+    gym_target_sessions: int | None = None
+    sleep_target_hours: float | None = None
+    protein_factor: float | None = None
+    deficit_kcal: int | None = None
+
+
+class FoodIn(BaseModel):
+    id: str
+    name: str
+    category: str = "other"
+    kcal: float
+    protein: float
+    carbs: float = 0
+    fat: float = 0
+    default_g: float = 100
+    aliases: list[str] = []
+
+
+@app.get("/d/{token}", include_in_schema=False)
+async def control_page(token: str) -> FileResponse:
+    secret = await app.state.service.dashboard_secret()
+    if not verify_token(secret, token):
+        raise HTTPException(status_code=403, detail="Ο σύνδεσμος έληξε. Στείλε /dashboard στο bot.")
+    return FileResponse(paths.WEB_DIR / "settings.html")
+
+
+@app.get("/api/profile")
+async def api_get_profile() -> dict:
+    return await _svc(app).profile()
+
+
+@app.get("/api/foods")
+async def api_foods() -> list[dict]:
+    return await foods.list_foods(app.state.db)
+
+
+@app.post("/api/profile", dependencies=[Depends(require_token)])
+async def api_profile(body: ProfileIn) -> dict:
+    return await _svc(app).update_profile(**body.model_dump(exclude_none=True))
+
+
+@app.post("/api/foods", dependencies=[Depends(require_token)])
+async def api_add_food(body: FoodIn) -> dict:
+    return await foods.add_food(
+        app.state.db, body.id, body.name, body.kcal, body.protein, body.carbs, body.fat,
+        category=body.category, default_g=body.default_g, aliases=body.aliases)
+
+
+@app.post("/api/foods/{food_id}/default_g", dependencies=[Depends(require_token)])
+async def api_food_default_g(food_id: str, grams: float = Body(..., embed=True)) -> dict:
+    await foods.set_default_g(app.state.db, food_id, grams)
+    return {"id": food_id, "default_g": grams}
+
+
+@app.delete("/api/foods/{food_id}", dependencies=[Depends(require_token)])
+async def api_delete_food(food_id: str) -> dict:
+    await foods.delete_food(app.state.db, food_id)
+    return {"deleted": food_id}
 
 
 def main() -> None:

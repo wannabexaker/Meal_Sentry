@@ -706,6 +706,21 @@ async def cmd_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text("Μενού 👇", reply_markup=MAIN_MENU)
 
 
+async def _send_dashboard_links(ctx: AppContext, message) -> None:
+    base = (ctx.config.dashboard_url
+            or f"http://{ctx.config.api_host}:{ctx.config.api_port}/").rstrip("/")
+    token = await ctx.service.make_dashboard_token()
+    await message.reply_text(
+        f"🎒 Dashboard (προβολή):\n{base}/\n\n"
+        f"⚙️ Control — ρυθμίσεις/φαγητά (λήγει σε 30′):\n{base}/d/{token}",
+        disable_web_page_preview=True)
+
+
+@guard
+async def cmd_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await _send_dashboard_links(_ctx(context), update.message)
+
+
 @guard
 async def on_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle a tap on the persistent reply keyboard."""
@@ -730,8 +745,7 @@ async def on_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     elif text == BTN_REPORT:
         await cmd_report(update, context)
     elif text == BTN_DASH:
-        url = ctx.config.dashboard_url or f"http://{ctx.config.api_host}:{ctx.config.api_port}/"
-        await update.message.reply_text(f"🎒 Dashboard (σφαιρική RPG εικόνα):\n{url}")
+        await _send_dashboard_links(ctx, update.message)
     elif text == BTN_HELP:
         await cmd_help(update, context)
 
@@ -844,7 +858,7 @@ def build_application(ctx: AppContext) -> Application:
         ("ate", cmd_ate), ("skip", cmd_skip), ("weight", cmd_weight), ("steps", cmd_steps),
         ("gym", cmd_gym), ("sleep", cmd_sleep), ("stock", cmd_stock), ("spent", cmd_spent),
         ("list", cmd_list), ("w", cmd_weed), ("meals", cmd_meals), ("fact", cmd_fact),
-        ("report", cmd_report), ("charts", cmd_charts),
+        ("report", cmd_report), ("charts", cmd_charts), ("dashboard", cmd_dashboard),
     ]:
         app.add_handler(CommandHandler(name, handler))
     # Tap-driven menu: exact-label buttons first, then a catch-all for typed values.
