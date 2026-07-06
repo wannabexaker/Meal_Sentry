@@ -15,7 +15,7 @@ from pydantic import BaseModel
 from . import paths
 from .config import load_config
 from .db import Database, init_db
-from .engine import facts, foods, meals, rewards
+from .engine import facts, foods, meals, notifs, rewards
 from .service import Service
 from .token import verify_token
 
@@ -227,6 +227,33 @@ async def api_reward_cost(reward_id: str, cost: int = Body(..., embed=True)) -> 
 async def api_delete_reward(reward_id: str) -> dict:
     await rewards.delete_reward(app.state.db, reward_id)
     return {"deleted": reward_id}
+
+
+class NotifIn(BaseModel):
+    enabled: bool | None = None
+    muted: bool | None = None
+    time: str | None = None
+
+
+@app.get("/api/notifs")
+async def api_notifs() -> list[dict]:
+    return await notifs.list_notifs(app.state.db)
+
+
+@app.post("/api/notifs/{key}", dependencies=[Depends(require_token)])
+async def api_notif_update(key: str, body: NotifIn) -> dict:
+    if await notifs.get_notif(app.state.db, key) is None:
+        raise HTTPException(status_code=404, detail="unknown notif key")
+    if body.enabled is not None:
+        await notifs.set_enabled(app.state.db, key, body.enabled)
+    if body.muted is not None:
+        await notifs.set_muted(app.state.db, key, body.muted)
+    if body.time is not None:
+        try:
+            await notifs.set_time(app.state.db, key, body.time)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return await notifs.get_notif(app.state.db, key)
 
 
 def main() -> None:

@@ -1,0 +1,16 @@
+[
+  {"key": "prep_morning",            "label": "Prep πρωί",                "time": "08:30"},
+  {"key": "meal1",                   "label": "Γεύμα 1",                  "time": "14:15"},
+  {"key": "protein_pace",            "label": "Ρυθμός πρωτεΐνης",         "time": "16:45"},
+  {"key": "protein_pace_aggressive", "label": "Πρωτεΐνη (επιθετικό)",     "time": "19:00"},
+  {"key": "meal2",                   "label": "Γεύμα 2",                  "time": "19:30"},
+  {"key": "steps",                   "label": "Βήματα",                   "time": "20:00"},
+  {"key": "protein_verdict",         "label": "Verdict πρωτεΐνης",        "time": "21:00"},
+  {"key": "prep_evening",            "label": "Prep βράδυ",               "time": "21:30"},
+  {"key": "sleep_winddown",          "label": "Χαλάρωμα ύπνου",           "time": "23:00"},
+  {"key": "screens_off",             "label": "Οθόνες off",               "time": "23:30"},
+  {"key": "gym_pressure",            "label": "Πίεση Gym",                "time": "18:30"},
+  {"key": "weekly_verdict",          "label": "Verdict εβδομάδας",        "time": "22:00"},
+  {"key": "shopping",                "label": "Ψώνια",                    "time": "18:00"},
+  {"key": "facts",                   "label": "Trivia (καθημερινό)",      "time": "random"}
+]

@@ -22,7 +22,7 @@ from apscheduler.triggers.date import DateTrigger
 
 from .config import Config
 from .db import Database
-from .engine import facts, game, gym, nag
+from .engine import facts, game, gym, nag, notifs
 from .service import Service
 from .util import date_str
 
@@ -59,8 +59,8 @@ class NagScheduler:
         self.scheduler = AsyncIOScheduler(timezone=config.tz)
 
     # ------------------------------------------------------------------ lifecycle
-    def start(self) -> None:
-        self._register_jobs()
+    async def start(self) -> None:
+        await self._register_jobs()
         self.scheduler.start()
         # boot recovery + today's facts push
         self.scheduler.add_job(self._on_boot, DateTrigger(run_date=datetime.now(self.config.tz)
@@ -80,32 +80,57 @@ class NagScheduler:
         self.scheduler.add_job(func, CronTrigger(timezone=self.config.tz, **kw),
                                misfire_grace_time=3600, coalesce=True)
 
-    def _register_jobs(self) -> None:
+    async def _register_jobs(self) -> None:
+        """Register cron jobs using DB-configured times where applicable.
+
+        Rows with ``enabled = 0`` in ``notif_config`` skip registration entirely — disable
+        + retime take effect on the next restart. Runtime mute is handled per-callback via
+        :func:`notifs.is_active`.
+        """
         wd = "mon-fri"
+
+        async def slot(key: str, dh: int, dm: int) -> tuple[int, int] | None:
+            if not await notifs.is_enabled_default(self.db, key):
+                return None
+            return await notifs.get_time(self.db, key, dh, dm)
+
         # --- weekday nutrition/steps/prep schedule ---
-        self._cron(lambda: self.fire_task("prep_morning"), day_of_week=wd, hour=8, minute=30)
-        self._cron(lambda: self.fire_task("meal1"), day_of_week=wd, hour=14, minute=15)
-        self._cron(self.protein_pace, day_of_week=wd, hour=16, minute=45)
-        self._cron(self.protein_pace_aggressive, day_of_week=wd, hour=19, minute=0)
+        if (t := await slot("prep_morning", 8, 30)):
+            self._cron(lambda: self.fire_task("prep_morning"), day_of_week=wd, hour=t[0], minute=t[1])
+        if (t := await slot("meal1", 14, 15)):
+            self._cron(lambda: self.fire_task("meal1"), day_of_week=wd, hour=t[0], minute=t[1])
+        if (t := await slot("protein_pace", 16, 45)):
+            self._cron(self.protein_pace, day_of_week=wd, hour=t[0], minute=t[1])
+        if (t := await slot("protein_pace_aggressive", 19, 0)):
+            self._cron(self.protein_pace_aggressive, day_of_week=wd, hour=t[0], minute=t[1])
         # Meal 2 at 19:30 on Mon/Wed/Thu/Fri (Tuesday is the shopping run instead)
-        self._cron(lambda: self.fire_task("meal2"), day_of_week="mon,wed,thu,fri",
-                   hour=19, minute=30)
-        self._cron(lambda: self.fire_task("steps"), day_of_week=wd, hour=20, minute=0)
-        self._cron(self.protein_verdict, day_of_week=wd, hour=21, minute=0)
-        self._cron(lambda: self.fire_task("prep_evening"), day_of_week=wd, hour=21, minute=30)
+        if (t := await slot("meal2", 19, 30)):
+            self._cron(lambda: self.fire_task("meal2"), day_of_week="mon,wed,thu,fri",
+                       hour=t[0], minute=t[1])
+        if (t := await slot("steps", 20, 0)):
+            self._cron(lambda: self.fire_task("steps"), day_of_week=wd, hour=t[0], minute=t[1])
+        if (t := await slot("protein_verdict", 21, 0)):
+            self._cron(self.protein_verdict, day_of_week=wd, hour=t[0], minute=t[1])
+        if (t := await slot("prep_evening", 21, 30)):
+            self._cron(lambda: self.fire_task("prep_evening"), day_of_week=wd, hour=t[0], minute=t[1])
 
         # --- sleep windows (daily) ---
-        self._cron(lambda: self._simple("sleep_winddown"), hour=23, minute=0)
-        self._cron(lambda: self._simple("screens_off"), hour=23, minute=30)
+        if (t := await slot("sleep_winddown", 23, 0)):
+            self._cron(lambda: self._simple("sleep_winddown"), hour=t[0], minute=t[1])
+        if (t := await slot("screens_off", 23, 30)):
+            self._cron(lambda: self._simple("screens_off"), hour=t[0], minute=t[1])
 
         # --- Tuesday shopping enforcer + countdowns ---
-        self._cron(lambda: self.fire_task("shopping"), day_of_week="tue", hour=18, minute=0)
-        self._cron(lambda: self.fire_task("shopping"), day_of_week="tue", hour=19, minute=30)
-        self._cron(lambda: self.shopping_countdown(45), day_of_week="tue", hour=20, minute=15)
-        self._cron(self.shopping_close, day_of_week="tue", hour=21, minute=0)
+        if (t := await slot("shopping", 18, 0)):
+            self._cron(lambda: self.fire_task("shopping"), day_of_week="tue", hour=t[0], minute=t[1])
+            # Follow-ups are anchored to the shopping key: only register when enabled.
+            self._cron(lambda: self.fire_task("shopping"), day_of_week="tue", hour=19, minute=30)
+            self._cron(lambda: self.shopping_countdown(45), day_of_week="tue", hour=20, minute=15)
+            self._cron(self.shopping_close, day_of_week="tue", hour=21, minute=0)
 
         # --- gym pressure ---
-        self._cron(self.gym_pressure_ping, day_of_week="mon-thu", hour=18, minute=30)
+        if (t := await slot("gym_pressure", 18, 30)):
+            self._cron(self.gym_pressure_ping, day_of_week="mon-thu", hour=t[0], minute=t[1])
         for h in (12, 15, 17):
             self._cron(self.gym_lastcall, day_of_week="fri", hour=h, minute=0)
 
@@ -113,7 +138,8 @@ class NagScheduler:
         self._cron(self.gym_weekend_reminder, day_of_week="sat,sun", hour=10, minute=0)
         self._cron(self.saturday_shopping, day_of_week="sat", hour=10, minute=0)
         self._cron(self.sunday_awareness, day_of_week="sat", hour=17, minute=0)
-        self._cron(self.weekly_verdict, day_of_week="sun", hour=22, minute=0)
+        if (t := await slot("weekly_verdict", 22, 0)):
+            self._cron(self.weekly_verdict, day_of_week="sun", hour=t[0], minute=t[1])
 
         # --- daily facts push: reschedule each morning to a random 15:00–18:00 slot ---
         self._cron(self._schedule_daily_fact, hour=0, minute=1)
@@ -143,11 +169,18 @@ class NagScheduler:
         return st["respect"]
 
     async def _simple(self, situation: str, **data) -> None:
+        # Runtime mute gate: notif_config.key aligns with the situation for canonical
+        # slots (sleep_winddown / screens_off / protein_verdict / etc.). Unknown keys
+        # (ad-hoc pings without a config row) evaluate to True → allowed.
+        if not await notifs.is_active(self.db, situation):
+            return
         text = self.coach.render(situation, respect=await self._respect(), **data)
         await self.notify(text)
 
     # ------------------------------------------------------------------ task firing
     async def fire_task(self, task_key: str) -> None:
+        if not await notifs.is_active(self.db, task_key):
+            return
         spec = TASK_SPECS[task_key]
         when = self.now()
         res = await nag.advance(self.db, task_key, when)
@@ -204,13 +237,17 @@ class NagScheduler:
                            floor=t["protein_floor_g"], gap=t["protein_gap_g"])
 
     async def protein_pace_aggressive(self) -> None:
+        if not await notifs.is_active(self.db, "protein_pace_aggressive"):
+            return
         when = self.now()
         st = await self.service.status(when)
         t = st["today"]
         if t["protein_gap_g"] > 0:  # only nag if projected below floor
-            await self._simple("protein_pace", tier="LOW",
-                               have=round(t["protein_g"]), floor=t["protein_floor_g"],
-                               gap=t["protein_gap_g"])
+            # Bypass _simple's own gate — we've already checked the aggressive-specific key.
+            text = self.coach.render("protein_pace", respect=await self._respect(),
+                                     tier="LOW", have=round(t["protein_g"]),
+                                     floor=t["protein_floor_g"], gap=t["protein_gap_g"])
+            await self.notify(text)
 
     async def protein_verdict(self) -> None:
         when = self.now()
@@ -314,6 +351,8 @@ class NagScheduler:
         log.info("Next fact push scheduled for %s", target.isoformat())
 
     async def push_fact(self) -> None:
+        if not await notifs.is_active(self.db, "facts"):
+            return
         when = self.now()
         fact = await facts.pick_fact(self.db, when)
         if fact is None:

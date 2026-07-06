@@ -94,6 +94,7 @@ async def init_db(db: Database, config: Config) -> None:
     await seed_facts(db)
     await seed_foods(db)
     await seed_rewards(db)
+    await seed_notifs(db)
 
 
 async def _migrate(db: Database) -> None:
@@ -235,6 +236,24 @@ async def seed_rewards(db: Database) -> None:
     await db.executemany(
         "INSERT OR IGNORE INTO rewards(id, name, emoji, cost, kind, meal_id, custom) "
         "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        rows,
+    )
+
+
+async def seed_notifs(db: Database) -> None:
+    """Insert the canonical notification schedule without clobbering user edits.
+
+    Rows survive first-boot with default enabled=1/muted=0; toggles/retimes made via the
+    settings UI or /notifs command persist across restarts.
+    """
+    data = json.loads(paths.NOTIFS_SEED.read_text(encoding="utf-8"))
+    rows = [
+        (n["key"], n["label"], n["time"], int(n.get("enabled", 1)), int(n.get("muted", 0)))
+        for n in data
+    ]
+    await db.executemany(
+        "INSERT OR IGNORE INTO notif_config(key, label, time, enabled, muted) "
+        "VALUES (?, ?, ?, ?, ?)",
         rows,
     )
 

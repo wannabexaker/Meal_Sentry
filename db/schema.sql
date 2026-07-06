@@ -210,3 +210,14 @@ CREATE TABLE IF NOT EXISTS wheel_log (
     outcome_type TEXT NOT NULL,             -- meal | exercise | coins | xp | jackpot
     detail       TEXT NOT NULL DEFAULT ''
 );
+
+-- Data-driven notification schedule (§Notifs). Seeded from data/notifs.json.
+-- ``time`` is HH:MM (or 'random' for the daily fact push). Toggle ``enabled``
+-- to skip a whole slot; toggle ``muted`` to silence at runtime without a restart.
+CREATE TABLE IF NOT EXISTS notif_config (
+    key     TEXT PRIMARY KEY,
+    label   TEXT NOT NULL,
+    time    TEXT NOT NULL,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    muted   INTEGER NOT NULL DEFAULT 0
+);

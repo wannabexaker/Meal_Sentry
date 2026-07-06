@@ -127,6 +127,15 @@
         <div style="margin-top:10px"><button onclick="addReward()">➕ Πρόσθεσε</button></div>
       </details>
     </section>
+
+    <section class="panel">
+      <h2>🔔 Ειδοποιήσεις</h2>
+      <div class="cat" style="margin:-4px 0 8px">
+        Enabled: εγγράφεται το cron στο boot. Muted: παραλείπεται στο runtime.
+        Αλλαγές ώρας / enable ισχύουν μετά από restart.
+      </div>
+      <div id="notifs"></div>
+    </section>
   </div>
   <div class="toast" id="toast"></div>
 
@@ -248,7 +257,28 @@ async function addReward() {
   q("r_id").value = q("r_name").value = ""; await loadRewards();
 }
 
-loadProfile(); loadFoods(); loadRewards();
+async function loadNotifs() {
+  const ns = await (await fetch("/api/notifs")).json();
+  q("notifs").innerHTML = ns.map(n => `
+    <div class="row">
+      <span class="nm">${n.label} <span class="cat">· ${n.key}</span></span>
+      <input class="g" style="width:80px" id="nt_${n.key}" value="${n.time}">
+      <label class="cat"><input type="checkbox" id="ne_${n.key}" ${n.enabled ? "checked" : ""}> enabled</label>
+      <label class="cat"><input type="checkbox" id="nm_${n.key}" ${n.muted ? "checked" : ""}> muted</label>
+      <button class="ghost" onclick="saveNotif('${n.key}')">💾</button>
+    </div>`).join("") || '<div class="cat">Κανένα.</div>';
+}
+async function saveNotif(key) {
+  const body = {
+    enabled: q("ne_" + key).checked,
+    muted: q("nm_" + key).checked,
+    time: q("nt_" + key).value.trim(),
+  };
+  await api("POST", "/api/notifs/" + key, body);
+  toast("✅ ειδοποίηση");
+}
+
+loadProfile(); loadFoods(); loadRewards(); loadNotifs();
 </script>
 </body>
 </html>

@@ -31,7 +31,7 @@ from telegram.ext import (
 from .charts import render_weight_trend
 from .config import Config, load_config
 from .db import Database, init_db
-from .engine import classes, facts, foods, game, meals, nag
+from .engine import classes, facts, foods, game, meals, nag, notifs
 from .paths import ROOT
 from .scheduler import TASK_SPECS, NagScheduler
 from .service import Service
@@ -59,7 +59,7 @@ class AppContext:
         await init_db(self.db, self.config)
         self.coach = Coach.load(self.config.active_coach, intensity=self.config.intensity)
         self.scheduler = NagScheduler(self.config, self.db, self.coach, self.notify)
-        self.scheduler.start()
+        await self.scheduler.start()
         log.info("MealSentry started. Coach=%s user=%s", self.coach.display_name,
                  self.config.user_id)
 
@@ -519,6 +519,23 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     elif action == "wheel":
         # Only "spin" today — arg carried for forward-compat (e.g. wheel:preview).
         await _spin_and_render(ctx, query=query)
+    elif action in {"nfen", "nfmute"}:
+        n = await notifs.get_notif(ctx.db, arg)
+        if n is None:
+            await query.edit_message_text("Άγνωστο notif.")
+            return
+        if action == "nfen":
+            await notifs.set_enabled(ctx.db, arg, not n["enabled"])
+        else:
+            await notifs.set_muted(ctx.db, arg, not n["muted"])
+        await _render_notifs_list(ctx, query=query)
+    elif action == "nfdone":
+        if arg == "list":
+            await _render_open_tasks(ctx, query=query, when=when)
+        else:
+            changed = await nag.confirm(ctx.db, arg, when)
+            msg = "✅ Μαρκαρίστηκε ως ολοκληρωμένο." if changed else "Ήταν ήδη κλειστό."
+            await query.edit_message_text(msg)
 
 
 TASK_CATEGORY = {"meal1": "meals", "meal2": "meals"}
@@ -785,6 +802,45 @@ async def cmd_wheel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _spin_and_render(_ctx(context), message=update.message)
 
 
+async def _render_notifs_list(ctx: AppContext, *, query=None, message=None) -> None:
+    """One row per notification: toggle enabled + toggle muted. Retime is web-only."""
+    ns = await notifs.list_notifs(ctx.db)
+    lines = ["🔔 *Ειδοποιήσεις* — άναψε/σβήσε ή mute:"]
+    rows: list = []
+    for n in ns:
+        en_flag = "✅" if n["enabled"] else "⛔"
+        mu_flag = "🔕" if n["muted"] else "🔔"
+        lines.append(f"{en_flag}{mu_flag} `{n['time']}` — {n['label']}")
+        rows.append([
+            (f"{en_flag} {n['label']}", f"nfen:{n['key']}"),
+            (mu_flag, f"nfmute:{n['key']}"),
+        ])
+    rows.append([("✅ Complete εκ των υστέρων", "nfdone:list")])
+    text = "\n".join(lines) + "\n\n_Ώρες αλλάζουν από το control panel; ισχύουν στο επόμενο restart._"
+    if query is not None:
+        await query.edit_message_text(text, reply_markup=_markup(rows), parse_mode=ParseMode.MARKDOWN)
+    elif message is not None:
+        await message.reply_text(text, reply_markup=_markup(rows), parse_mode=ParseMode.MARKDOWN)
+
+
+async def _render_open_tasks(ctx: AppContext, *, query, when) -> None:
+    """List today's OPEN tasks so the user can mark one DONE retroactively."""
+    open_rows = await nag.open_tasks(ctx.db, when)
+    if not open_rows:
+        await query.edit_message_text("👍 Καμία ανοιχτή εργασία για σήμερα.")
+        return
+    labels = {k: v["label"] for k, v in TASK_SPECS.items()}
+    rows = [[(labels.get(r["task_key"], r["task_key"]), f"nfdone:{r['task_key']}")]
+            for r in open_rows]
+    await query.edit_message_text(
+        "✅ Ποια ξέχασες να μαρκάρεις;", reply_markup=_markup(rows))
+
+
+@guard
+async def cmd_notifs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await _render_notifs_list(_ctx(context), message=update.message)
+
+
 async def _send_meal_picker(ctx: AppContext, query=None, *, message=None) -> None:
     """Tap-to-log buttons for enabled, unlocked meals/combos (no command needed)."""
     rows, row = [], []
@@ -984,7 +1040,7 @@ def build_application(ctx: AppContext) -> Application:
         ("gym", cmd_gym), ("sleep", cmd_sleep), ("stock", cmd_stock), ("spent", cmd_spent),
         ("list", cmd_list), ("w", cmd_weed), ("meals", cmd_meals), ("fact", cmd_fact),
         ("report", cmd_report), ("charts", cmd_charts), ("dashboard", cmd_dashboard),
-        ("class", cmd_class), ("wheel", cmd_wheel),
+        ("class", cmd_class), ("wheel", cmd_wheel), ("notifs", cmd_notifs),
     ]:
         app.add_handler(CommandHandler(name, handler))
     # Tap-driven menu: exact-label buttons first, then a catch-all for typed values.
