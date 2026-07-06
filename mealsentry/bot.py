@@ -516,6 +516,9 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                 f"✂️ Εφαρμόστηκε. Νέος στόχος: {targets.calorie_target} kcal.")
     elif action == "munch":
         await query.edit_message_text(ctx.coach.render("munchies_ack"))
+    elif action == "wheel":
+        # Only "spin" today — arg carried for forward-compat (e.g. wheel:preview).
+        await _spin_and_render(ctx, query=query)
 
 
 TASK_CATEGORY = {"meal1": "meals", "meal2": "meals"}
@@ -608,6 +611,7 @@ BTN_GYM = "🏋️ Γυμναστήριο"
 BTN_WEIGHT = "⚖️ Ζύγισμα"
 BTN_SLEEP = "😴 Ύπνος"
 BTN_REWARDS = "🪙 Ανταμοιβές"
+BTN_WHEEL = "🎰 Τροχός"
 BTN_FACT = "🧠 Trivia"
 BTN_REPORT = "📊 Report"
 BTN_DASH = "🎒 Dashboard"
@@ -615,11 +619,11 @@ BTN_HELP = "❓ Βοήθεια"
 
 MAIN_MENU = ReplyKeyboardMarkup(
     [[BTN_STATUS, BTN_FOOD], [BTN_STEPS, BTN_GYM], [BTN_WEIGHT, BTN_SLEEP],
-     [BTN_REWARDS, BTN_FACT], [BTN_REPORT, BTN_DASH], [BTN_HELP]],
+     [BTN_REWARDS, BTN_WHEEL], [BTN_FACT, BTN_REPORT], [BTN_DASH, BTN_HELP]],
     resize_keyboard=True, is_persistent=True,
 )
 MENU_LABELS = {BTN_STATUS, BTN_FOOD, BTN_STEPS, BTN_GYM, BTN_WEIGHT, BTN_SLEEP,
-               BTN_REWARDS, BTN_FACT, BTN_REPORT, BTN_DASH, BTN_HELP}
+               BTN_REWARDS, BTN_WHEEL, BTN_FACT, BTN_REPORT, BTN_DASH, BTN_HELP}
 
 STEPS_PRESETS = [[("8.000", "steps:8000"), ("10.000", "steps:10000")],
                  [("11.000", "steps:11000"), ("12.000", "steps:12000")],
@@ -725,6 +729,62 @@ async def _send_rewards_shop(ctx: AppContext, *, query=None, message=None) -> No
         await message.reply_text(text, reply_markup=_markup(rows), parse_mode=ParseMode.MARKDOWN)
 
 
+def _wheel_outcome_text(res: dict) -> tuple[str, list]:
+    """Render a wheel spin result as (text, button-rows) for both /wheel and callback."""
+    outcome = res["outcome"]
+    coins_left = res["coins_left"]
+    t = outcome["type"]
+    buttons: list = []
+    if t == "meal":
+        if outcome["kind"] == "combo":
+            head = f"🎰 🍽️ *{outcome['name']}* — combo της τύχης!"
+            buttons = [[("✅ Το έφαγα", f"eat:{outcome['id']}")]]
+        elif outcome["kind"] == "food":
+            head = f"🎰 🍽️ *{outcome['name']}* — φαγητό της τύχης!"
+            buttons = [[("⚖️ Καταγραφή σε γραμμάρια", f"fpick:{outcome['id']}")]]
+        else:
+            head = "🎰 🍽️ Δεν βρέθηκε διαθέσιμο φαγητό."
+    elif t == "exercise":
+        head = f"🎰 🏋️ Άσκηση: *{outcome['group']}* — {outcome['challenge']}"
+    elif t == "coins":
+        head = f"🎰 🪙 Κέρδισες *+{outcome['amount']}* coins!"
+    elif t == "xp":
+        head = f"🎰 ✨ *+{outcome['amount']} XP*!"
+        if res.get("applied", {}).get("level_up"):
+            head += f"\n🆙 Level {res['applied']['level']} — {res['applied']['level_name']}!"
+    elif t == "jackpot":
+        head = f"🎰 🎉 *JACKPOT!* +{outcome['coins']}🪙 δώρο!"
+    else:
+        head = "🎰 —"
+    buttons.append([("🎰 Ξανά", "wheel:spin")])
+    return f"{head}\n\n_Coins: {coins_left}🪙_", buttons
+
+
+async def _spin_and_render(ctx: AppContext, *, query=None, message=None) -> None:
+    """Single entrypoint used by /wheel, the menu button, and the 'Ξανά' callback."""
+    when = ctx.service.now()
+    res = await ctx.service.spin_wheel(when)
+    if not res["ok"]:
+        text = f"❌ {res['reason']}"
+        if query is not None:
+            await query.edit_message_text(text)
+        elif message is not None:
+            await message.reply_text(text)
+        return
+    text, buttons = _wheel_outcome_text(res)
+    if query is not None:
+        await query.edit_message_text(text, reply_markup=_markup(buttons),
+                                       parse_mode=ParseMode.MARKDOWN)
+    elif message is not None:
+        await message.reply_text(text, reply_markup=_markup(buttons),
+                                  parse_mode=ParseMode.MARKDOWN)
+
+
+@guard
+async def cmd_wheel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await _spin_and_render(_ctx(context), message=update.message)
+
+
 async def _send_meal_picker(ctx: AppContext, query=None, *, message=None) -> None:
     """Tap-to-log buttons for enabled, unlocked meals/combos (no command needed)."""
     rows, row = [], []
@@ -803,6 +863,8 @@ async def on_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_text("😴 Στείλε: ώρα ύπνου + ξύπνημα (π.χ. 23:40 07:10).")
     elif text == BTN_REWARDS:
         await _send_rewards_shop(ctx, message=update.message)
+    elif text == BTN_WHEEL:
+        await cmd_wheel(update, context)
     elif text == BTN_FACT:
         await cmd_fact(update, context)
     elif text == BTN_REPORT:
@@ -922,7 +984,7 @@ def build_application(ctx: AppContext) -> Application:
         ("gym", cmd_gym), ("sleep", cmd_sleep), ("stock", cmd_stock), ("spent", cmd_spent),
         ("list", cmd_list), ("w", cmd_weed), ("meals", cmd_meals), ("fact", cmd_fact),
         ("report", cmd_report), ("charts", cmd_charts), ("dashboard", cmd_dashboard),
-        ("class", cmd_class),
+        ("class", cmd_class), ("wheel", cmd_wheel),
     ]:
         app.add_handler(CommandHandler(name, handler))
     # Tap-driven menu: exact-label buttons first, then a catch-all for typed values.

@@ -15,7 +15,7 @@ from typing import Any
 
 from .config import Config
 from .db import Database
-from .engine import classes, foods, game, gym, inventory, math, meals, rewards, sleep
+from .engine import classes, foods, game, gym, inventory, math, meals, rewards, sleep, wheel
 from .util import date_str
 
 
@@ -176,6 +176,42 @@ class Service:
             meal = await meals.log_meal(self.db, reward["meal_id"], when)
         coins_left = (await game.get_state(self.db))["coins"]
         return {"ok": True, "reward": reward, "coins_left": coins_left, "meal": meal}
+
+    # -------------------------------------------------------------------- wheel of fortune
+    async def spin_wheel(self, when: datetime) -> dict:
+        """Spend 1 🪙, resolve a random outcome, apply grants, and log the spin.
+
+        Refuses when the user cannot afford the spin. Meal/exercise outcomes have no
+        coin/xp side-effect — the bot renders a one-tap follow-up (log the food, do the
+        exercise). Coins/xp/jackpot outcomes grant directly.
+        """
+        coins_before = (await game.get_state(self.db))["coins"]
+        if coins_before < 1:
+            return {"ok": False, "reason": "Χρειάζεσαι 1 🪙."}
+        if not await game.spend_coins(self.db, 1):
+            return {"ok": False, "reason": "Χρειάζεσαι 1 🪙."}
+
+        outcome = await wheel.spin(self.db, when)
+        applied: dict[str, Any] = {}
+
+        if outcome["type"] == "coins":
+            await game.grant_coins(self.db, outcome["amount"])
+            applied = {"coins_delta": outcome["amount"]}
+        elif outcome["type"] == "xp":
+            xp = await game.grant_xp(self.db, outcome["amount"], when)
+            applied = {"xp_delta": outcome["amount"], "level_up": xp["level_up"],
+                       "level": xp["level"], "level_name": xp["level_name"]}
+        elif outcome["type"] == "jackpot":
+            await game.grant_coins(self.db, outcome["coins"])
+            applied = {"coins_delta": outcome["coins"], "jackpot": True}
+
+        await self.db.execute(
+            "INSERT INTO wheel_log(ts, date, outcome_type, detail) VALUES (?, ?, ?, ?)",
+            (when.isoformat(timespec="seconds"), date_str(when),
+             outcome["type"], wheel.summarize(outcome)),
+        )
+        coins_left = (await game.get_state(self.db))["coins"]
+        return {"ok": True, "outcome": outcome, "applied": applied, "coins_left": coins_left}
 
     async def _after_food_log(self, when: datetime) -> dict:
         """Shared post-log bookkeeping: meal XP + once/day protein-floor award + today totals."""

@@ -201,3 +201,12 @@ CREATE TABLE IF NOT EXISTS kv (
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
+
+-- 🎰 Wheel of Fortune spin history — enables recent-outcome avoidance & audit.
+CREATE TABLE IF NOT EXISTS wheel_log (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts           TEXT NOT NULL,
+    date         TEXT NOT NULL,
+    outcome_type TEXT NOT NULL,             -- meal | exercise | coins | xp | jackpot
+    detail       TEXT NOT NULL DEFAULT ''
+);

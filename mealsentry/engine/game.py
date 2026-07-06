@@ -205,6 +205,20 @@ async def grant_coins(db: Database, n: int) -> None:
     await db.execute("UPDATE game_state SET coins = coins + ? WHERE id = 1", (n,))
 
 
+async def grant_xp(db: Database, amount: int, when: datetime) -> dict:
+    """Grant flat XP from a non-event source (e.g. wheel outcome). Recomputes the level."""
+    row = await _state_row(db)
+    old_xp, old_level = row["xp"], level_for_xp(row["xp"])[0]
+    new_xp = old_xp + max(0, amount)
+    new_level, name = level_for_xp(new_xp)
+    await db.execute(
+        "UPDATE game_state SET xp = ?, level = ?, updated_at = ? WHERE id = 1",
+        (new_xp, new_level, when.isoformat(timespec="seconds")),
+    )
+    return {"xp": new_xp, "level": new_level, "level_name": name,
+            "level_up": new_level > old_level, "delta": amount}
+
+
 async def set_boss_week(db: Database, active: bool) -> None:
     await db.execute("UPDATE game_state SET boss_week = ? WHERE id = 1", (int(active),))
 
