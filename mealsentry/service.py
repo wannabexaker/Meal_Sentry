@@ -15,7 +15,7 @@ from typing import Any
 
 from .config import Config
 from .db import Database
-from .engine import foods, game, gym, inventory, math, meals, rewards, sleep
+from .engine import classes, foods, game, gym, inventory, math, meals, rewards, sleep
 from .util import date_str
 
 
@@ -71,7 +71,13 @@ class Service:
     _PROFILE_FIELDS = {
         "name", "sex", "age", "height_cm", "weight_kg", "start_weight_kg", "steps_target",
         "gym_target_sessions", "sleep_target_hours", "protein_factor", "deficit_kcal",
+        "desired_class",
     }
+
+    async def set_class(self, class_id: str) -> dict:
+        await self.update_profile(desired_class=class_id)
+        p = await self.profile()
+        return classes.describe(p["height_cm"], p["weight_kg"], p["desired_class"])
 
     async def update_profile(self, **fields) -> dict:
         sets = {k: v for k, v in fields.items() if k in self._PROFILE_FIELDS and v is not None}
@@ -345,6 +351,8 @@ class Service:
         d = date_str(when)
         p = await self.profile()
         tier = _rpg_tier(g["level"])
+        char_class = classes.describe(p["height_cm"], p["weight_kg"],
+                                      p.get("desired_class") or classes.DEFAULT_CLASS)
 
         weighed = bool(await self.db.fetchval("SELECT 1 FROM weight_log WHERE date = ?", (d,)))
         slept = await self.db.fetchone("SELECT hours FROM sleep_log WHERE date = ?", (d,))
@@ -405,6 +413,7 @@ class Service:
                 "cheat_tokens": g["cheat_tokens"], "coins": g["coins"],
                 "boss_week": g["boss_week"],
                 "weight_kg": st["weight_kg"], "start_weight_kg": st["start_weight_kg"],
+                "class": char_class,
             },
             "tier": tier,
             "coins": g["coins"],

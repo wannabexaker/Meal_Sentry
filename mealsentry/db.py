@@ -110,6 +110,7 @@ async def _migrate(db: Database) -> None:
         "foods": [("default_g", "REAL NOT NULL DEFAULT 100")],
         "meal_log": [("food_id", "TEXT"), ("grams", "REAL")],
         "game_state": [("coins", "INTEGER NOT NULL DEFAULT 0")],
+        "user_profile": [("desired_class", "TEXT NOT NULL DEFAULT 'warrior'")],
     }
     for table, cols in adds.items():
         existing = await columns(table)

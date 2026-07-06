@@ -31,7 +31,7 @@ from telegram.ext import (
 from .charts import render_weight_trend
 from .config import Config, load_config
 from .db import Database, init_db
-from .engine import facts, foods, game, meals, nag
+from .engine import classes, facts, foods, game, meals, nag
 from .paths import ROOT
 from .scheduler import TASK_SPECS, NagScheduler
 from .service import Service
@@ -450,6 +450,11 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         await _send_meal_picker(ctx, query)
     elif action == "recent":
         await _send_recent_foods(ctx, query)
+    elif action == "class":
+        c = await ctx.service.set_class(arg)
+        await query.edit_message_text(
+            f"🎭 Είσαι πλέον: *{c['title']} {c['emoji']}*\n_{c['desc']}_",
+            parse_mode=ParseMode.MARKDOWN)
     elif action == "redeem":
         res = await ctx.service.redeem_reward(arg, when)
         if not res["ok"]:
@@ -760,6 +765,24 @@ async def cmd_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
 
 @guard
+async def cmd_class(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    ctx = _ctx(context)
+    p = await ctx.service.profile()
+    suggest = classes.best_fit(p["height_cm"], p["weight_kg"])
+    cur = classes.describe(p["height_cm"], p["weight_kg"],
+                           p.get("desired_class") or classes.DEFAULT_CLASS)
+    rows = []
+    for c in classes.list_classes():
+        star = " ⭐" if c["id"] == suggest else ""
+        rows.append([(f"{c['emoji']} {c['name']} · {c['ideal_w'][0]}-{c['ideal_w'][1]}kg{star}",
+                      f"class:{c['id']}")])
+    await update.message.reply_text(
+        f"🎭 Class: τώρα *{cur['title']} {cur['emoji']}*\n"
+        "Διάλεξε φιλοδοξία (⭐ = ταιριάζει στο σώμα σου):",
+        reply_markup=_markup(rows), parse_mode=ParseMode.MARKDOWN)
+
+
+@guard
 async def on_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle a tap on the persistent reply keyboard."""
     ctx = _ctx(context)
@@ -899,6 +922,7 @@ def build_application(ctx: AppContext) -> Application:
         ("gym", cmd_gym), ("sleep", cmd_sleep), ("stock", cmd_stock), ("spent", cmd_spent),
         ("list", cmd_list), ("w", cmd_weed), ("meals", cmd_meals), ("fact", cmd_fact),
         ("report", cmd_report), ("charts", cmd_charts), ("dashboard", cmd_dashboard),
+        ("class", cmd_class),
     ]:
         app.add_handler(CommandHandler(name, handler))
     # Tap-driven menu: exact-label buttons first, then a catch-all for typed values.

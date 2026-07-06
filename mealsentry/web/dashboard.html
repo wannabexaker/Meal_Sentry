@@ -187,6 +187,8 @@
             <span class="title" id="title">—</span>
           </div>
           <div class="name" id="name">—</div>
+          <div id="classline" style="font-size:13px;color:var(--accent2);font-weight:700;margin-top:2px"></div>
+          <div id="classideal" style="font-size:11px;color:var(--muted)"></div>
           <div class="bars">
             <div>
               <div class="barlabel"><span>XP</span><span id="xpTxt"></span></div>
@@ -248,10 +250,15 @@ function render(d) {
   const c = d.character, t = d.tier;
   document.body.dataset.tier = t.index;
   $("tierBadge").textContent = "Tier " + (t.index+1) + " · " + t.name;
-  $("avatar").textContent = AVATARS[t.index] || "⚔️";
+  const cls = c.class || {};
+  $("avatar").textContent = cls.emoji || AVATARS[t.index] || "⚔️";
   $("lvl").textContent = "Lv " + c.level;
   $("title").textContent = c.title;
   $("name").textContent = c.name + "  ·  " + c.weight_kg + "kg";
+  $("classline").textContent = cls.title ? (cls.emoji + " " + cls.title) : "";
+  $("classideal").textContent = cls.ideal_h
+    ? `Ideal ${cls.ideal_h[0]}-${cls.ideal_h[1]}cm · ${cls.ideal_w[0]}-${cls.ideal_w[1]}kg`
+    : "";
 
   const toNext = c.xp_to_next;
   $("xpTxt").textContent = toNext == null ? c.xp + " (MAX)" : c.xp + " XP · " + toNext + " για next";

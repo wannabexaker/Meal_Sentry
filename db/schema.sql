@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS user_profile (
     sleep_target_hours   REAL    NOT NULL DEFAULT 7.0,
     protein_factor       REAL    NOT NULL DEFAULT 1.8,
     deficit_kcal         INTEGER NOT NULL DEFAULT 600,
+    desired_class        TEXT    NOT NULL DEFAULT 'warrior',  -- RPG class aspiration
     updated_at           TEXT    NOT NULL
 );
 

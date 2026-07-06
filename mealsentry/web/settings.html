@@ -66,6 +66,15 @@
         <div><label>Ύπνος (h)</label><input id="p_sleep_target_hours" type="number" step="0.5"></div>
         <div><label>Protein factor</label><input id="p_protein_factor" type="number" step="0.1"></div>
         <div><label>Deficit (kcal)</label><input id="p_deficit_kcal" type="number"></div>
+        <div><label>Class 🎭</label>
+          <select id="p_desired_class">
+            <option value="assassin">🗡️ Assassin</option>
+            <option value="ranger">🏹 Ranger</option>
+            <option value="monk">🥋 Monk</option>
+            <option value="brawler">🥊 Brawler</option>
+            <option value="warrior">⚔️ Warrior</option>
+            <option value="tank">🛡️ Tank</option>
+          </select></div>
       </div>
       <div style="margin-top:12px"><button onclick="saveProfile()">💾 Αποθήκευση προφίλ</button></div>
     </section>
@@ -142,15 +151,15 @@ async function api(method, path, body) {
 async function loadProfile() {
   const p = await (await fetch("/api/profile")).json();
   for (const k of ["name","age","height_cm","weight_kg","steps_target","gym_target_sessions",
-                   "sleep_target_hours","protein_factor","deficit_kcal"])
+                   "sleep_target_hours","protein_factor","deficit_kcal","desired_class"])
     if (p[k] != null) q("p_" + k).value = p[k];
 }
 async function saveProfile() {
   const body = {};
   for (const k of ["name","age","height_cm","weight_kg","steps_target","gym_target_sessions",
-                   "sleep_target_hours","protein_factor","deficit_kcal"]) {
+                   "sleep_target_hours","protein_factor","deficit_kcal","desired_class"]) {
     const v = q("p_" + k).value.trim();
-    if (v !== "") body[k] = (k === "name") ? v : Number(v);
+    if (v !== "") body[k] = (k === "name" || k === "desired_class") ? v : Number(v);
   }
   await api("POST", "/api/profile", body); toast("✅ Αποθηκεύτηκε");
 }
