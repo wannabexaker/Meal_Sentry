@@ -1,5 +1,21 @@
 """Service layer orchestration: ate flow + floor award once, weight recompute, steps."""
 
+import pytest
+
+from mealsentry.engine import meals
+
+
+async def test_treat_locked_until_protein_and_room(service, monday):
+    # Empty day → the cheat treat is locked (protein floor not met).
+    with pytest.raises(meals.MealLocked):
+        await service.ate("halva", monday)
+    # Hit the protein floor with calorie headroom (4 shakes = 176 g protein, 1280 kcal).
+    for _ in range(4):
+        await service.ate("shake", monday)
+    status = {t["id"]: t for t in await service.treat_status(monday)}
+    assert status["halva"]["available"] is True
+    res = await service.ate("halva", monday)  # now allowed
+    assert res["logged"]["kcal"] == 235
 
 
 async def test_ate_awards_meal_and_floor_once(service, monday):

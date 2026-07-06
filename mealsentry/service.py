@@ -120,7 +120,35 @@ class Service:
         await self.db.kv_set(key, "1")
         return await game.award(self.db, event, when)
 
+    async def _treat_available(self, meal, when: datetime) -> tuple[bool, str]:
+        """A cheat treat unlocks when protein floor is hit AND there is calorie room for it."""
+        kcal, protein = await meals.today_totals(self.db, when)
+        targets = await self.compute_targets(when)
+        if protein < targets.protein_floor_g:
+            gap = targets.protein_floor_g - round(protein)
+            return False, f"🔒 «{meal.name}»: πιάσε πρώτα την πρωτεΐνη (λείπουν {gap}g)."
+        room = targets.calorie_target - kcal
+        if room < meal.kcal:
+            return False, (f"🔒 «{meal.name}»: δεν έχεις θερμιδικό περιθώριο "
+                           f"({round(room)} < {round(meal.kcal)} kcal).")
+        return True, ""
+
+    async def treat_status(self, when: datetime) -> list[dict]:
+        """Lock state of every cheat treat today (for the dashboard 'Special' slots)."""
+        out = []
+        for m in await meals.list_meals(self.db):
+            if "cheat" in m.tags:
+                available, reason = await self._treat_available(m, when)
+                out.append({"id": m.id, "name": m.name, "kcal": m.kcal,
+                            "available": available, "reason": reason})
+        return out
+
     async def ate(self, meal_id: str, when: datetime, fraction: float = 1.0) -> dict:
+        meal = await meals.get_meal(self.db, meal_id)
+        if "cheat" in meal.tags:
+            available, reason = await self._treat_available(meal, when)
+            if not available:
+                raise meals.MealLocked(reason)
         logged = await meals.log_meal(self.db, meal_id, when, fraction)
         meal_award = await game.award(self.db, "meal", when)
         kcal, protein = await meals.today_totals(self.db, when)
@@ -286,6 +314,9 @@ class Service:
             {"item": "Σολομός", "locked": bool(salmon["locked"]) if salmon else True,
              "rarity": "legendary", "kind": "reward"},
         ]
+        for t in await self.treat_status(when):
+            specials.append({"item": t["name"], "locked": not t["available"],
+                             "rarity": "treat", "kind": "treat", "reason": t["reason"]})
 
         loot_rows = await self.db.fetchall(
             "SELECT ml.ts, COALESCE(m.name, ml.meal_id) name, ml.kcal, ml.protein_g, ml.fraction "

@@ -104,5 +104,45 @@
     "protein_g": 45,
     "locked": 1,
     "tags": "main,reward"
+  },
+  {
+    "id": "salad_caesar",
+    "name": "Caesar (με κοτόπουλο)",
+    "contents": "Μαρούλι ρωμέν, 100g κοτόπουλο, σος καίσαρα, παρμεζάνα, κρουτόν",
+    "kcal": 450,
+    "protein_g": 32,
+    "tags": "salad"
+  },
+  {
+    "id": "salad_mixed",
+    "name": "Ανάμικτη σαλάτα",
+    "contents": "Μαρούλι, ντομάτα, αγγούρι, καρότο, 10g ελαιόλαδο",
+    "kcal": 170,
+    "protein_g": 4,
+    "tags": "salad"
+  },
+  {
+    "id": "salad_greek",
+    "name": "Χωριάτικη",
+    "contents": "Ντομάτα, αγγούρι, πιπεριά, 60g φέτα, ελιές, ελαιόλαδο",
+    "kcal": 320,
+    "protein_g": 9,
+    "tags": "salad"
+  },
+  {
+    "id": "halva",
+    "name": "Χαλβάς 🍬",
+    "contents": "50g χαλβάς — cheat, ξεκλειδώνει με πρωτεΐνη + θερμιδικό περιθώριο",
+    "kcal": 235,
+    "protein_g": 6,
+    "tags": "treat,cheat"
+  },
+  {
+    "id": "ice_cream",
+    "name": "Παγωτό 🍨",
+    "contents": "100g παγωτό — cheat, ξεκλειδώνει με πρωτεΐνη + θερμιδικό περιθώριο",
+    "kcal": 207,
+    "protein_g": 3.5,
+    "tags": "treat,cheat"
   }
 ]

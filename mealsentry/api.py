@@ -49,6 +49,11 @@ async def dashboard_page() -> FileResponse:
     return FileResponse(paths.WEB_DIR / "dashboard.html")
 
 
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon() -> FileResponse:
+    return FileResponse(paths.WEB_DIR / "favicon.svg", media_type="image/svg+xml")
+
+
 @app.get("/dashboard/data")
 async def dashboard_data() -> dict:
     """Aggregated payload the dashboard polls: character, quests, inventory, loot, stats."""

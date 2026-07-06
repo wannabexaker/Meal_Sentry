@@ -91,6 +91,7 @@ async def init_db(db: Database, config: Config) -> None:
     await _seed_streaks(db)
     await seed_meals(db)
     await seed_facts(db)
+    await seed_foods(db)
 
 
 async def _seed_profile(db: Database, config: Config, now: str) -> None:
@@ -162,6 +163,25 @@ async def seed_facts(db: Database) -> None:
     await db.executemany(
         """INSERT OR IGNORE INTO facts (id, title, body, verdict, tags, source, custom)
            VALUES (?, ?, ?, ?, ?, ?, ?)""",
+        rows,
+    )
+
+
+async def seed_foods(db: Database) -> None:
+    """Insert seed foods (per-100 g macros) without overwriting user-added ones."""
+    data = json.loads(paths.FOODS_DB.read_text(encoding="utf-8"))
+    rows = [
+        (
+            f["id"], f["name"], f.get("category", "other"), float(f["kcal"]),
+            float(f["protein"]), float(f.get("carbs", 0)), float(f.get("fat", 0)),
+            ",".join(f.get("aliases", [])), 0,
+        )
+        for f in data["foods"]
+    ]
+    await db.executemany(
+        """INSERT OR IGNORE INTO foods
+           (id, name, category, kcal, protein, carbs, fat, aliases, custom)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         rows,
     )
 

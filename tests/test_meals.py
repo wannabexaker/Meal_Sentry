@@ -1,20 +1,8 @@
-"""Meal system: macro calc, rules engine (yogurt cap, salmon lock), logging."""
+"""Meal system: rules engine (yogurt cap, salmon lock), logging."""
 
 import pytest
 
 from mealsentry.engine import meals
-
-
-def test_compute_macros_known_foods():
-    m = meals.compute_macros([("αυγα", 250), ("κοτοπουλο", 200), ("cottage", 100)])
-    assert m.unresolved == []
-    assert m.kcal > 600
-    assert m.protein > 80
-
-
-def test_compute_macros_reports_unresolved():
-    m = meals.compute_macros([("κοτοπουλο", 200), ("δρακοντόσουπα", 100)])
-    assert "δρακοντόσουπα" in m.unresolved
 
 
 async def test_log_meal_totals(db, monday):

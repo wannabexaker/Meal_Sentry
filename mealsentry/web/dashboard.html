@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="icon" type="image/svg+xml" href="/favicon.ico" />
 <title>MealSentry — Character Sheet</title>
 <style>
   /* ---- base theme (overridden per level tier via [data-tier]) ---- */
@@ -124,6 +125,7 @@
   .slot.rar-high { border-color: var(--steps); }
   .slot.rar-epic { border-color: #9b6bd6; box-shadow: 0 0 14px rgba(155,107,214,.4); }
   .slot.rar-legendary { border-color: #ff8a2b; box-shadow: 0 0 16px rgba(255,138,43,.45); animation: legend 2.4s ease-in-out infinite; }
+  .slot.rar-treat { border-color: #e56bd0; box-shadow: 0 0 12px rgba(229,107,208,.35); }
   .slot.locked { filter: grayscale(.7) brightness(.7); }
   .slot .lock { position: absolute; top: 6px; right: 8px; font-size: 13px; }
   @keyframes legend { 0%,100% { box-shadow: 0 0 12px rgba(255,138,43,.35);} 50% { box-shadow: 0 0 22px rgba(255,138,43,.65);} }
@@ -285,9 +287,12 @@ function render(d) {
   $("inv").innerHTML = invItems.length ? invItems.map(slot).join("")
     : '<span class="empty">Άδειο. Πρόσθεσε με /stock.</span>';
 
+  const spIco = (s) => s.kind === "consumable" ? "🎟️"
+    : s.kind === "treat" ? (s.item.includes("Παγωτό") ? "🍨" : "🍬") : "🐟";
   const sp = d.specials.map(s => s.kind === "consumable"
     ? { rarity:"epic", ico:"🎟️", name:s.item, qty:"×"+(s.count||0), locked:(s.count||0)===0 }
-    : { rarity:"legendary", ico:"🐟", name:s.item, qty:s.locked?"Κλειδωμένο":"Ξεκλειδωμένο!", locked:s.locked });
+    : { rarity:(s.rarity||"legendary"), ico:spIco(s), name:s.item,
+        qty:s.locked?"🔒 Κλειδωμένο":"🔓 Ξεκλείδωτο!", locked:s.locked });
   $("specials").innerHTML = sp.map(slot).join("");
 
   // loot

@@ -4,13 +4,9 @@ engine (yogurt_bomb weekly cap, salmon reward lock).
 
 from __future__ import annotations
 
-import json
-import unicodedata
 from dataclasses import dataclass
 from datetime import datetime
-from functools import lru_cache
 
-from .. import paths
 from ..db import Database
 from ..util import date_str, week_bounds
 
@@ -58,67 +54,7 @@ def _row_to_meal(row) -> Meal:
     )
 
 
-# --------------------------------------------------------------------------- foods DB
-def _normalize(text: str) -> str:
-    """Lowercase + strip Greek accents for fuzzy ingredient matching."""
-    nfd = unicodedata.normalize("NFD", text.lower())
-    return "".join(c for c in nfd if unicodedata.category(c) != "Mn").strip()
-
-
-@lru_cache(maxsize=1)
-def _foods_index() -> dict[str, dict]:
-    data = json.loads(paths.FOODS_DB.read_text(encoding="utf-8"))
-    index: dict[str, dict] = {}
-    for food in data["foods"]:
-        keys = {food["id"], food["name"], *food.get("aliases", [])}
-        for key in keys:
-            index[_normalize(key)] = food
-    return index
-
-
-def find_food(query: str) -> dict | None:
-    """Resolve an ingredient name/alias to a food record (per-100g macros)."""
-    idx = _foods_index()
-    norm = _normalize(query)
-    if norm in idx:
-        return idx[norm]
-    # substring fallback: 'στηθος κοτοπουλο' -> 'κοτοπουλο'
-    for key, food in idx.items():
-        if key and (key in norm or norm in key):
-            return food
-    return None
-
-
-@dataclass
-class MacroTotals:
-    kcal: float
-    protein: float
-    carbs: float
-    fat: float
-    unresolved: list[str]
-
-    def rounded(self) -> MacroTotals:
-        return MacroTotals(
-            round(self.kcal), round(self.protein, 1), round(self.carbs, 1),
-            round(self.fat, 1), self.unresolved,
-        )
-
-
-def compute_macros(ingredients: list[tuple[str, float]]) -> MacroTotals:
-    """Sum macros for a list of (ingredient, grams) using the food DB (per 100 g)."""
-    kcal = protein = carbs = fat = 0.0
-    unresolved: list[str] = []
-    for name, grams in ingredients:
-        food = find_food(name)
-        if food is None:
-            unresolved.append(name)
-            continue
-        f = grams / 100.0
-        kcal += food["kcal"] * f
-        protein += food["protein"] * f
-        carbs += food["carbs"] * f
-        fat += food["fat"] * f
-    return MacroTotals(kcal, protein, carbs, fat, unresolved).rounded()
+# Food-DB lookup (find_food / compute_macros) moved to engine/foods.py (now DB-backed).
 
 
 # --------------------------------------------------------------------------- queries

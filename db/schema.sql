@@ -35,6 +35,20 @@ CREATE TABLE IF NOT EXISTS meals (
     tags         TEXT    NOT NULL DEFAULT ''
 );
 
+-- Ingredient macro DB (per 100 g). Seeded from data/foods.json; editable at runtime so the
+-- user can add foods (salads etc.) without a code change. Used by /newmeal and NL parsing.
+CREATE TABLE IF NOT EXISTS foods (
+    id       TEXT PRIMARY KEY,
+    name     TEXT NOT NULL,
+    category TEXT NOT NULL DEFAULT 'other',
+    kcal     REAL NOT NULL,
+    protein  REAL NOT NULL,
+    carbs    REAL NOT NULL,
+    fat      REAL NOT NULL,
+    aliases  TEXT NOT NULL DEFAULT '',   -- comma-separated
+    custom   INTEGER NOT NULL DEFAULT 0  -- 1 = user-added
+);
+
 CREATE TABLE IF NOT EXISTS meal_log (
     id        INTEGER PRIMARY KEY AUTOINCREMENT,
     ts        TEXT NOT NULL,
