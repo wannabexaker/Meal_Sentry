@@ -1,8 +1,8 @@
-# MealSentry — Native Android Port · Copilot Build Spec
+# Fit Sentry — Native Android App · Copilot Build Spec
 
-> **Mission.** Build a brand-new, **fully-offline, on-device** native Android app that is a **1:1 behavioural port** of MealSentry + the Chad Coach persona — currently a Python **Telegram bot + FastAPI** backend that runs on a Raspberry Pi. The Android app must run **entirely on the phone**: no server, no Pi, no network, no Telegram, no login. Same domain logic, same features, same rules — professional, tested, and extensible.
+> **Mission.** Build **Fit Sentry**: a brand-new, **fully-offline, on-device** native Android app that is a **1:1 behavioural port** of the Python **MealSentry** app + the Chad Coach persona (today a Telegram bot + FastAPI backend on a Raspberry Pi). *Fit Sentry* is the new product name; **MealSentry** stays the behavioural source of truth. The app must run **entirely on the phone**: no server, no Pi, no network, no Telegram, no login. Same domain logic, same features, same rules — professional, tested, and extensible.
 >
-> **This is a greenfield app in its own repo/module.** It reuses none of the Python code at runtime; it re-implements the same behaviour in Kotlin.
+> **This is a greenfield app in its own repo/folder** (`C:\Projects\Fit_Sentry` → `github.com/wannabexaker/Fit_Sentry`). It reuses none of the Python code at runtime; it re-implements the same behaviour in Kotlin.
 
 ---
 
@@ -23,6 +23,14 @@ You (Copilot) are given **two inputs**:
 | Schedule / notifications | `mealsentry/scheduler.py` (cron times, escalation, gating) |
 
 **Rule of thumb:** if a number, weight, threshold, portion, or Greek sentence exists in the Python repo, **copy it exactly** — do not invent your own. Where this spec and the Python source disagree, **the Python source wins** for behaviour; this spec wins for Android architecture.
+
+### Project coordinates
+
+- **App name:** Fit Sentry (Greek UI; the coach persona stays "Chad Coach").
+- **applicationId:** `com.fitsentry.app` — adjust if you like, but keep it stable once chosen.
+- **Project folder:** `C:\Projects\Fit_Sentry` (greenfield — do **not** build inside the Python repo).
+- **Git remote:** `https://github.com/wannabexaker/Fit_Sentry`. If the repo doesn't exist yet, create it (e.g. `gh repo create wannabexaker/Fit_Sentry --private --source . --remote origin`).
+- **Behavioural reference (read-only):** the Python MealSentry repo — this file sits at its root (`C:\Projects\ChadCoach`). Keep it open in the same workspace so you can copy exact values.
 
 ---
 
