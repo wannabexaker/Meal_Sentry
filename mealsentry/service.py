@@ -14,7 +14,7 @@ from typing import Any
 
 from .config import Config
 from .db import Database
-from .engine import game, gym, inventory, math, meals, sleep
+from .engine import foods, game, gym, inventory, math, meals, sleep
 from .util import date_str
 
 
@@ -142,6 +142,41 @@ class Service:
                 out.append({"id": m.id, "name": m.name, "kcal": m.kcal,
                             "available": available, "reason": reason})
         return out
+
+    async def _after_food_log(self, when: datetime) -> dict:
+        """Shared post-log bookkeeping: meal XP + once/day protein-floor award + today totals."""
+        meal_award = await game.award(self.db, "meal", when)
+        kcal, protein = await meals.today_totals(self.db, when)
+        targets = await self.compute_targets(when)
+        floor_award = None
+        if protein >= targets.protein_floor_g:
+            floor_award = await self._award_once("protein_floor", when)
+        return {
+            "today": {"kcal": round(kcal, 1), "protein_g": round(protein, 1),
+                      "protein_floor_g": targets.protein_floor_g,
+                      "floor_hit": protein >= targets.protein_floor_g},
+            "award": _asdict(meal_award),
+            "floor_award": _asdict(floor_award) if floor_award else None,
+        }
+
+    async def eat_food(self, food_id: str, when: datetime, grams: float | None = None) -> dict:
+        """Log a single weighed food by grams (default portion if grams is None)."""
+        food = await foods.get_food(self.db, food_id)
+        if food is None:
+            raise meals.MealNotFound(f"Δεν υπάρχει τρόφιμο «{food_id}».")
+        g = max(1.0, min(grams if grams is not None else food["default_g"], 3000.0))
+        factor = g / 100.0
+        kcal = round(food["kcal"] * factor, 1)
+        protein = round(food["protein"] * factor, 1)
+        label = f"{food['name']} {int(round(g))}g"
+        await self.db.execute(
+            "INSERT INTO meal_log(ts, date, meal_id, food_id, grams, fraction, kcal, protein_g, note) "
+            "VALUES (?, ?, ?, ?, ?, 1.0, ?, ?, ?)",
+            (when.isoformat(timespec="seconds"), date_str(when), food_id, food_id, g,
+             kcal, protein, label))
+        result = await self._after_food_log(when)
+        result["logged"] = {"name": food["name"], "grams": g, "kcal": kcal, "protein_g": protein}
+        return result
 
     async def ate(self, meal_id: str, when: datetime, fraction: float = 1.0) -> dict:
         meal = await meals.get_meal(self.db, meal_id)
@@ -319,11 +354,14 @@ class Service:
                              "rarity": "treat", "kind": "treat", "reason": t["reason"]})
 
         loot_rows = await self.db.fetchall(
-            "SELECT ml.ts, COALESCE(m.name, ml.meal_id) name, ml.kcal, ml.protein_g, ml.fraction "
+            "SELECT ml.ts, ml.note, ml.food_id, COALESCE(m.name, ml.meal_id) mname, "
+            "ml.kcal, ml.protein_g, ml.fraction "
             "FROM meal_log ml LEFT JOIN meals m ON ml.meal_id = m.id "
             "WHERE ml.date = ? ORDER BY ml.ts", (d,))
-        loot = [{"time": _hhmm(r["ts"]), "name": r["name"], "kcal": round(r["kcal"]),
-                 "protein": round(r["protein_g"]), "fraction": r["fraction"]} for r in loot_rows]
+        loot = [{"time": _hhmm(r["ts"]),
+                 "name": (r["note"] if r["food_id"] else r["mname"]),
+                 "kcal": round(r["kcal"]), "protein": round(r["protein_g"]),
+                 "fraction": (1.0 if r["food_id"] else r["fraction"])} for r in loot_rows]
 
         return {
             "character": {

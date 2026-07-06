@@ -85,6 +85,7 @@ async def init_db(db: Database, config: Config) -> None:
     """Create the schema (idempotent) and seed reference + initial rows."""
     schema = paths.SCHEMA_SQL.read_text(encoding="utf-8")
     await db.executescript(schema)
+    await _migrate(db)
     now = config.now().isoformat(timespec="seconds")
     await _seed_profile(db, config, now)
     await _seed_game_state(db, now)
@@ -92,6 +93,27 @@ async def init_db(db: Database, config: Config) -> None:
     await seed_meals(db)
     await seed_facts(db)
     await seed_foods(db)
+
+
+async def _migrate(db: Database) -> None:
+    """Additive schema migrations for DBs created before a column existed (Pi already has data).
+
+    ``CREATE TABLE IF NOT EXISTS`` does not add columns to existing tables, so we add them
+    here idempotently.
+    """
+    async def columns(table: str) -> set[str]:
+        rows = await db.fetchall(f"PRAGMA table_info({table})")
+        return {r["name"] for r in rows}
+
+    adds = {
+        "foods": [("default_g", "REAL NOT NULL DEFAULT 100")],
+        "meal_log": [("food_id", "TEXT"), ("grams", "REAL")],
+    }
+    for table, cols in adds.items():
+        existing = await columns(table)
+        for name, decl in cols:
+            if name not in existing:
+                await db.execute(f"ALTER TABLE {table} ADD COLUMN {name} {decl}")
 
 
 async def _seed_profile(db: Database, config: Config, now: str) -> None:
@@ -168,20 +190,23 @@ async def seed_facts(db: Database) -> None:
 
 
 async def seed_foods(db: Database) -> None:
-    """Insert seed foods (per-100 g macros) without overwriting user-added ones."""
+    """Insert seed foods (per-100 g macros + default portion) without clobbering user edits."""
+    from .engine.foods import default_portion  # local import avoids a circular dependency
+
     data = json.loads(paths.FOODS_DB.read_text(encoding="utf-8"))
     rows = [
         (
             f["id"], f["name"], f.get("category", "other"), float(f["kcal"]),
             float(f["protein"]), float(f.get("carbs", 0)), float(f.get("fat", 0)),
+            float(f.get("default_g") or default_portion(f["id"], f.get("category", "other"))),
             ",".join(f.get("aliases", [])), 0,
         )
         for f in data["foods"]
     ]
     await db.executemany(
         """INSERT OR IGNORE INTO foods
-           (id, name, category, kcal, protein, carbs, fat, aliases, custom)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+           (id, name, category, kcal, protein, carbs, fat, default_g, aliases, custom)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         rows,
     )
 

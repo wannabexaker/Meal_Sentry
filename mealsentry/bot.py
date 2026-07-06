@@ -31,7 +31,7 @@ from telegram.ext import (
 from .charts import render_weight_trend
 from .config import Config, load_config
 from .db import Database, init_db
-from .engine import facts, game, meals, nag
+from .engine import facts, foods, game, meals, nag
 from .paths import ROOT
 from .scheduler import NagScheduler
 from .service import Service
@@ -435,6 +435,26 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                 f"{res['logged']['protein_g']}p (+{res['award']['xp_delta']} XP)" + extra)
         except (meals.MealLocked, meals.MealCapReached, meals.MealNotFound) as e:
             await query.edit_message_text(str(e))
+    elif action == "cat":
+        await _send_food_list(ctx, arg, query)
+    elif action == "foodcats":
+        await _send_food_categories(ctx, query=query)
+    elif action == "combos":
+        await _send_meal_picker(ctx, query)
+    elif action == "fpick":
+        await _send_food_grams(ctx, arg, query)
+    elif action == "eatg":
+        food_id, _, grams = arg.rpartition(":")
+        try:
+            await _log_food(ctx, food_id, float(grams), query.edit_message_text)
+            await _confirm_open_meal_task(ctx)
+        except (meals.MealNotFound, ValueError):
+            await query.edit_message_text("Σφάλμα καταγραφής.")
+    elif action == "fgcustom":
+        context.user_data["await"] = "food_grams"
+        context.user_data["food_pending"] = arg
+        food = await foods.get_food(ctx.db, arg)
+        await query.edit_message_text(f"✏️ Πόσα γραμμάρια «{food['name'] if food else arg}»; (στείλε αριθμό)")
     elif action == "steps":
         res = await ctx.service.log_steps(int(arg), when)
         await nag.confirm(ctx.db, "steps", when)
@@ -453,7 +473,7 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             f"🏋️ Session {res['sessions']}/{res['target']} ({arg}′). +{a['xp_delta']} XP{up}")
     elif action == "menu":
         if arg == "food":
-            await _send_meal_picker(ctx, query)
+            await _send_food_categories(ctx, query=query)
         elif arg == "steps_other":
             context.user_data["await"] = "steps"
             await query.edit_message_text("👟 Στείλε μου τον αριθμό βημάτων (π.χ. 10500).")
@@ -582,8 +602,76 @@ STEPS_PRESETS = [[("8.000", "steps:8000"), ("10.000", "steps:10000")],
 GYM_PRESETS = [[("45′", "gymlog:45"), ("60′", "gymlog:60"), ("90′", "gymlog:90")]]
 
 
+FOOD_CATEGORIES = [
+    ("protein", "🥩 Πρωτεΐνη"), ("carb", "🍚 Υδατ/κες"), ("dairy", "🧀 Γαλακτ."),
+    ("veg", "🥗 Λαχανικά"), ("fruit", "🍎 Φρούτα"), ("fat", "🥑 Λίπη"),
+    ("legume", "🫘 Όσπρια"), ("sauce", "🥫 Σάλτσες"), ("supplement", "💊 Συμπλ."),
+    ("snack", "🍫 Σνακ"), ("sweetener", "🍯 Γλυκ."), ("treat", "🍬 Treats"),
+]
+
+
+async def _send_food_categories(ctx: AppContext, *, query=None, message=None) -> None:
+    """First level of the granular food picker: category buttons + a Combos shortcut."""
+    present = {f["category"] for f in await foods.list_foods(ctx.db)}
+    rows, row = [], []
+    for cid, label in FOOD_CATEGORIES:
+        if cid not in present:
+            continue
+        row.append((label, f"cat:{cid}"))
+        if len(row) == 2:
+            rows.append(row)
+            row = []
+    if row:
+        rows.append(row)
+    rows.append([("🍱 Combos (πλήρη γεύματα)", "combos")])
+    text = "🍽️ Διάλεξε κατηγορία (ή combo):"
+    if query is not None:
+        await query.edit_message_text(text, reply_markup=_markup(rows))
+    elif message is not None:
+        await message.reply_text(text, reply_markup=_markup(rows))
+
+
+async def _send_food_list(ctx: AppContext, category: str, query) -> None:
+    rows, row = [], []
+    for f in await foods.list_foods(ctx.db, category=category):
+        row.append((f"{f['name']} · {int(f['default_g'])}g", f"fpick:{f['id']}"))
+        if len(row) == 2:
+            rows.append(row)
+            row = []
+    if row:
+        rows.append(row)
+    rows.append([("⬅️ Κατηγορίες", "foodcats")])
+    await query.edit_message_text(f"Διάλεξε τρόφιμο — {category}:", reply_markup=_markup(rows))
+
+
+async def _send_food_grams(ctx: AppContext, food_id: str, query) -> None:
+    food = await foods.get_food(ctx.db, food_id)
+    if food is None:
+        await query.edit_message_text("Δεν βρέθηκε το τρόφιμο.")
+        return
+    d = food["default_g"]
+    g = lambda x: int(round(x))  # noqa: E731
+    rows = [
+        [(f"✅ {g(d)}g", f"eatg:{food_id}:{g(d)}"), (f"½ · {g(d*0.5)}g", f"eatg:{food_id}:{g(d*0.5)}")],
+        [(f"×1.5 · {g(d*1.5)}g", f"eatg:{food_id}:{g(d*1.5)}"),
+         (f"×2 · {g(d*2)}g", f"eatg:{food_id}:{g(d*2)}")],
+        [("✏️ Άλλα γραμμάρια", f"fgcustom:{food_id}")],
+    ]
+    await query.edit_message_text(f"🍽️ {food['name']} — πόσα γραμμάρια;", reply_markup=_markup(rows))
+
+
+async def _log_food(ctx: AppContext, food_id: str, grams: float, reply) -> None:
+    res = await ctx.service.eat_food(food_id, ctx.service.now(), grams)
+    lg, today = res["logged"], res["today"]
+    extra = f"\n💪 Protein floor! +{res['floor_award']['xp_delta']} XP" if res["floor_award"] else ""
+    await reply(
+        f"✅ {lg['name']} {int(round(lg['grams']))}g: {lg['kcal']} kcal, {lg['protein_g']}g "
+        f"(+{res['award']['xp_delta']} XP)\nΣύνολο: {today['kcal']} kcal, "
+        f"{today['protein_g']}/{today['protein_floor_g']}g πρωτεΐνη{extra}")
+
+
 async def _send_meal_picker(ctx: AppContext, query=None, *, message=None) -> None:
-    """Tap-to-log buttons for enabled, unlocked meals (no command needed)."""
+    """Tap-to-log buttons for enabled, unlocked meals/combos (no command needed)."""
     rows, row = [], []
     for m in await meals.list_meals(ctx.db):
         if m.locked:
@@ -614,7 +702,7 @@ async def on_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if text == BTN_STATUS:
         await cmd_status(update, context)
     elif text == BTN_FOOD:
-        await _send_meal_picker(ctx, message=update.message)
+        await _send_food_categories(ctx, message=update.message)
     elif text == BTN_STEPS:
         await update.message.reply_text("👟 Πόσα βήματα;", reply_markup=_markup(STEPS_PRESETS))
     elif text == BTN_GYM:
@@ -644,6 +732,18 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     text = (update.message.text or "").strip()
     when = ctx.service.now()
 
+    if awaiting == "food_grams":
+        food_id = context.user_data.pop("food_pending", None)
+        try:
+            grams = float(text.replace(",", "."))
+        except ValueError:
+            context.user_data["await"] = "food_grams"
+            context.user_data["food_pending"] = food_id
+            await update.message.reply_text("Δώσε αριθμό γραμμαρίων, π.χ. 180")
+            return
+        if food_id:
+            await _log_food(ctx, food_id, grams, update.message.reply_text)
+        return
     if awaiting == "weight":
         try:
             kg = float(text.replace(",", "."))
