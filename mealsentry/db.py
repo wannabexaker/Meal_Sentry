@@ -115,6 +115,16 @@ async def _migrate(db: Database) -> None:
             if name not in existing:
                 await db.execute(f"ALTER TABLE {table} ADD COLUMN {name} {decl}")
 
+    # One-time backfill: a plain ADD COLUMN defaults every pre-existing food's default_g to 100.
+    # Set sensible per-food portions for the seed foods once (skip user-added/edited ones).
+    if not await db.kv_get("mig_default_g_v2"):
+        from .engine.foods import default_portion
+        for r in await db.fetchall("SELECT id, category, custom FROM foods"):
+            if not r["custom"]:
+                await db.execute("UPDATE foods SET default_g = ? WHERE id = ?",
+                                 (default_portion(r["id"], r["category"]), r["id"]))
+        await db.kv_set("mig_default_g_v2", "1")
+
 
 async def _seed_profile(db: Database, config: Config, now: str) -> None:
     exists = await db.fetchval("SELECT 1 FROM user_profile WHERE id = 1")

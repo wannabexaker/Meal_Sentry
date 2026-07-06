@@ -44,6 +44,8 @@ async def test_migration_adds_columns_to_old_db(tmp_path):
         "CREATE TABLE meal_log (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, date TEXT, "
         "meal_id TEXT, fraction REAL, kcal REAL, protein_g REAL, note TEXT);"
     )
+    # a pre-existing seed food (no default_g column yet) — must be backfilled, not left at 100
+    con.execute("INSERT INTO foods VALUES ('chicken_breast','Στήθος','protein',120,23,0,2.6,'',0)")
     con.commit()
     con.close()
 
