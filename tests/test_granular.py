@@ -34,6 +34,15 @@ async def test_set_default_g(db, service, monday):
     assert r["logged"]["grams"] == 200
 
 
+async def test_recent_first_ordering(db, service, monday):
+    from datetime import timedelta
+    await service.eat_food("banana", monday)
+    await service.eat_food("apple", monday + timedelta(minutes=5))  # more recent
+    ids = [f["id"] for f in await foods.list_recent_first(db, "fruit")]
+    assert ids.index("apple") < ids.index("banana") < ids.index("berries")  # recent→old→never
+    assert (await foods.recent_foods(db, 10))[0]["id"] == "apple"
+
+
 async def test_migration_adds_columns_to_old_db(tmp_path):
     """An old DB missing default_g / food_id / grams must migrate cleanly on init_db."""
     p = str(tmp_path / "old.db")

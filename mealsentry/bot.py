@@ -441,6 +441,8 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         await _send_food_categories(ctx, query=query)
     elif action == "combos":
         await _send_meal_picker(ctx, query)
+    elif action == "recent":
+        await _send_recent_foods(ctx, query)
     elif action == "fpick":
         await _send_food_grams(ctx, arg, query)
     elif action == "eatg":
@@ -623,7 +625,10 @@ async def _send_food_categories(ctx: AppContext, *, query=None, message=None) ->
             row = []
     if row:
         rows.append(row)
-    rows.append([("🍱 Combos (πλήρη γεύματα)", "combos")])
+    tail = [("🍱 Combos", "combos")]
+    if await foods.recent_foods(ctx.db, 1):
+        tail.insert(0, ("🕐 Πρόσφατα", "recent"))
+    rows.append(tail)
     text = "🍽️ Διάλεξε κατηγορία (ή combo):"
     if query is not None:
         await query.edit_message_text(text, reply_markup=_markup(rows))
@@ -633,7 +638,7 @@ async def _send_food_categories(ctx: AppContext, *, query=None, message=None) ->
 
 async def _send_food_list(ctx: AppContext, category: str, query) -> None:
     rows, row = [], []
-    for f in await foods.list_foods(ctx.db, category=category):
+    for f in await foods.list_recent_first(ctx.db, category=category):  # recent-eaten first
         row.append((f"{f['name']} · {int(f['default_g'])}g", f"fpick:{f['id']}"))
         if len(row) == 2:
             rows.append(row)
@@ -642,6 +647,13 @@ async def _send_food_list(ctx: AppContext, category: str, query) -> None:
         rows.append(row)
     rows.append([("⬅️ Κατηγορίες", "foodcats")])
     await query.edit_message_text(f"Διάλεξε τρόφιμο — {category}:", reply_markup=_markup(rows))
+
+
+async def _send_recent_foods(ctx: AppContext, query) -> None:
+    items = await foods.recent_foods(ctx.db, 10)
+    rows = [[(f"{f['name']} · {int(f['default_g'])}g", f"fpick:{f['id']}")] for f in items]
+    rows.append([("⬅️ Κατηγορίες", "foodcats")])
+    await query.edit_message_text("🕐 Πρόσφατα (τα τελευταία 10):", reply_markup=_markup(rows))
 
 
 async def _send_food_grams(ctx: AppContext, food_id: str, query) -> None:

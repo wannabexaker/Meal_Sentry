@@ -130,6 +130,26 @@ async def get_food(db: Database, food_id: str) -> dict | None:
     return _row_to_food(row) if row else None
 
 
+async def list_recent_first(db: Database, category: str | None = None) -> list[dict]:
+    """Foods ordered by most-recently-logged first (then alphabetical); never-logged last."""
+    where = "WHERE f.category = ?" if category else ""
+    params = (category,) if category else ()
+    rows = await db.fetchall(
+        f"SELECT f.*, MAX(ml.ts) AS last_ts FROM foods f "
+        f"LEFT JOIN meal_log ml ON ml.food_id = f.id {where} "
+        f"GROUP BY f.id ORDER BY last_ts IS NULL, last_ts DESC, f.name", params)
+    return [_row_to_food(r) for r in rows]
+
+
+async def recent_foods(db: Database, limit: int = 10) -> list[dict]:
+    """The last ``limit`` distinct foods actually logged (quick re-log shortcut)."""
+    rows = await db.fetchall(
+        "SELECT f.*, MAX(ml.ts) AS last_ts FROM foods f "
+        "JOIN meal_log ml ON ml.food_id = f.id "
+        "GROUP BY f.id ORDER BY last_ts DESC LIMIT ?", (limit,))
+    return [_row_to_food(r) for r in rows]
+
+
 async def add_food(
     db: Database, food_id: str, name: str, kcal: float, protein: float,
     carbs: float = 0.0, fat: float = 0.0, *, category: str = "other",
