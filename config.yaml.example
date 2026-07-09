@@ -3,13 +3,14 @@
 #   MEALSENTRY_TOKEN    — Telegram bot token from @BotFather
 #   MEALSENTRY_USER_ID  — the single allowed Telegram numeric user id
 
-# --- Identity / biometrics (seeded into DB on first run; updatable at runtime) ---
+# --- Identity / biometrics (EXAMPLE values — replace with your own) ---
+# Seeded into the DB on first run; editable later here or at runtime.
 name: YourName
 sex: male            # male | female
-age: 38              # placeholder — correct via /profile or here
-height_cm: 190
-weight_kg: 96
-start_weight_kg: 100
+age: 30
+height_cm: 180
+weight_kg: 85
+start_weight_kg: 90
 
 # --- Targets ---
 steps_target: 11000
@@ -42,4 +43,4 @@ dashboard_url: ""
 
 # --- Shopping / budget ---
 chicken_budget_eur: 100      # monthly baseline for /spent tracking
-shop_store: "ΑΒ Βασιλόπουλος"
+shop_store: "Your Supermarket"   # your local store (shown in shopping reminders)

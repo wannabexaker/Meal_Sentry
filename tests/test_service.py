@@ -19,7 +19,7 @@ async def test_coins_earned_and_reward_redeemed(service, db, monday):
 
 
 async def test_ate_awards_meal_and_floor_once(service, monday):
-    # Log enough protein to cross the 173 g floor across several meals.
+    # Log enough protein to cross the 153 g floor across several meals.
     floor_awards = 0
     for meal_id in ("chicken", "beef", "pork", "omelette"):  # 62+55+58+49 = 224g
         res = await service.ate(meal_id, monday)
@@ -48,7 +48,7 @@ async def test_status_shape(service, monday):
     await service.ate("shake", monday)
     st = await service.status(monday)
     assert st["today"]["protein_g"] == 44
-    assert st["targets"]["protein_floor_g"] == 173
+    assert st["targets"]["protein_floor_g"] == 153
     assert "respect_tier" in st["game"]
 
 

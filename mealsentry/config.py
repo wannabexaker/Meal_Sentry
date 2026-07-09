@@ -27,10 +27,10 @@ class Config:
     # Identity / biometrics (seed values; overridden by config.yaml)
     name: str = "Athlete"
     sex: str = "male"
-    age: int = 38
-    height_cm: float = 190.0
-    weight_kg: float = 96.0
-    start_weight_kg: float = 100.0
+    age: int = 30
+    height_cm: float = 180.0
+    weight_kg: float = 85.0
+    start_weight_kg: float = 90.0
 
     # Targets
     steps_target: int = 11000
@@ -60,7 +60,7 @@ class Config:
 
     # Shopping
     chicken_budget_eur: float = 100.0
-    shop_store: str = "ΑΒ Βασιλόπουλος"
+    shop_store: str = "Your Supermarket"
 
     # Secrets (from env; not serialized)
     token: str = field(default="", repr=False)
